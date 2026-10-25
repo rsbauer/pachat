@@ -8,6 +8,13 @@ Build a simple web-based chat interface that lets a user send prompts to a local
 
 The app should be built in a way that is easy to extend later for persistence, auth, and stricter production hardening.
 
+## Current Progress
+
+- The Docker Compose app and PostgreSQL services are running on the server.
+- The web app is reachable at `http://<server>:9105`.
+- The FastAPI shell, browser UI, `/api/chat` streaming route, Ollama client, and initial PostgreSQL schema are implemented.
+- End-to-end model streaming and database-backed chat history have not yet been verified.
+
 ---
 
 ## Scope
@@ -38,13 +45,15 @@ The initial version should focus on:
 - [X] Confirm Ollama model is available and reachable from the app host
 - [X] Decide the internal app port for the Compose service (port: 9105)
 - [X] Create the Docker Compose stack for app + PostgreSQL
-- [ ] Build the FastAPI app shell and configuration loading
-- [ ] Implement PostgreSQL schema and storage layer
+- [X] Build the FastAPI app shell and configuration loading
+- [X] Create the initial PostgreSQL schema
+- [ ] Implement PostgreSQL storage/repository layer
 - [ ] Add chat session and message creation/retrieval logic
-- [ ] Implement the `/api/chat` streaming endpoint
-- [ ] Connect the backend to the external Ollama API
-- [ ] Build the simple HTML/JS chat frontend
-- [ ] Verify end-to-end POC flow in the browser
+- [X] Implement the `/api/chat` streaming endpoint
+- [X] Add the external Ollama API client
+- [X] Build the simple HTML/JS chat frontend
+- [X] Start the Compose services and verify browser access on port 9105
+- [ ] Verify end-to-end model streaming in the browser
 - [ ] Test the app with persisted history and model streaming
 - [ ] Add Caddy route later once the domain is ready
 - [ ] Document and defer production hardening items
@@ -64,7 +73,7 @@ The system should be split into three logical parts for the proof of concept:
    - Python app container serves the frontend and API
    - PostgreSQL container stores chat sessions and messages
    - Docker Compose keeps the app environment reproducible
-   - The app will listen on a single internal port: `9105`
+    - The app listens on port `9105` and is running on the server
 
 3. External model host / inference layer
    - Ollama runs outside Docker and is already available
@@ -159,9 +168,7 @@ volumes:
   pgdata:
 ```
 
-Deliverable:
-
-- app and database start together via `docker compose up`
+Status: complete. The app and database start together with `docker compose up -d --build`; the app has been confirmed reachable at `http://<server>:9105`.
 
 ---
 
