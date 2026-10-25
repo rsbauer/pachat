@@ -1,0 +1,138 @@
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-shell {
+  width: min(1200px, 95vw);
+  height: min(900px, 90vh);
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  background: #111827;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.sidebar {
+  background: #0b1120;
+  padding: 24px 18px;
+  border-right: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.sidebar h1 {
+  margin: 0 0 20px;
+  font-size: 2rem;
+}
+
+.secondary-button {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 10px;
+  background: transparent;
+  color: #e2e8f0;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.status-box {
+  margin-top: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #cbd5e1;
+}
+
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.message {
+  display: flex;
+}
+
+.message.user {
+  justify-content: flex-end;
+}
+
+.message.assistant {
+  justify-content: flex-start;
+}
+
+.bubble {
+  max-width: 75%;
+  padding: 12px 16px;
+  border-radius: 16px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.message.user .bubble {
+  background: #2563eb;
+  color: #eff6ff;
+}
+
+.message.assistant .bubble {
+  background: #1f2937;
+  color: #e5e7eb;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  gap: 12px;
+  padding: 18px 20px 20px;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.7);
+}
+
+textarea {
+  width: 100%;
+  resize: none;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 12px 14px;
+  font: inherit;
+}
+
+button {
+  border: none;
+  border-radius: 12px;
+  background: #2563eb;
+  color: white;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

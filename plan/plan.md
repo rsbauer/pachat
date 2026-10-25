@@ -35,9 +35,9 @@ The initial version should focus on:
 
 ## Todo Checklist
 
-- [ ] Confirm Ollama model is available and reachable from the app host
-- [ ] Decide the internal app port for the Compose service (default: 8000)
-- [ ] Create the Docker Compose stack for app + PostgreSQL
+- [X] Confirm Ollama model is available and reachable from the app host
+- [X] Decide the internal app port for the Compose service (port: 9105)
+- [X] Create the Docker Compose stack for app + PostgreSQL
 - [ ] Build the FastAPI app shell and configuration loading
 - [ ] Implement PostgreSQL schema and storage layer
 - [ ] Add chat session and message creation/retrieval logic
@@ -64,7 +64,7 @@ The system should be split into three logical parts for the proof of concept:
    - Python app container serves the frontend and API
    - PostgreSQL container stores chat sessions and messages
    - Docker Compose keeps the app environment reproducible
-   - The app will listen on a single internal port such as `8000`
+   - The app will listen on a single internal port: `9105`
 
 3. External model host / inference layer
    - Ollama runs outside Docker and is already available
@@ -125,7 +125,7 @@ External runtime not managed by Compose:
 
 Initial Compose responsibilities:
 
-- expose the Python app on a single internal port such as `8000`
+- expose the Python app on a single internal port: `9105`
 - mount app source code for local development
 - define PostgreSQL environment variables
 - create a shared Docker network between the app and database
@@ -138,11 +138,11 @@ services:
   app:
     build: ./app
     ports:
-      - "8000:8000"
+      - "9105:9105"
     environment:
       DATABASE_URL: postgres://app:secret@db:5432/pachat
-      OLLAMA_BASE_URL: http://<external-ollama-host>:11434
-      OLLAMA_MODEL: medgemma:4b
+      OLLAMA_BASE_URL: http://localhost:11434
+      OLLAMA_MODEL: hf.co/DevQuasar/google.medgemma-4b-it-GGUF:Q4_K_M
     depends_on:
       - db
 
@@ -319,7 +319,7 @@ Example concept for later:
 
 ```caddy
 chat.example.com {
-    reverse_proxy localhost:8000
+    reverse_proxy localhost:9105
 }
 ```
 
