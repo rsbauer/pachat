@@ -13,7 +13,9 @@ The app should be built in a way that is easy to extend later for persistence, a
 - The Docker Compose app and PostgreSQL services are running on the server.
 - The web app is reachable at `http://<server>:9105`.
 - The FastAPI shell, browser UI, `/api/chat` streaming route, Ollama client, and initial PostgreSQL schema are implemented.
-- End-to-end model streaming and database-backed chat history have not yet been verified.
+- End-to-end model streaming has been verified in the browser after setting `OLLAMA_BASE_URL` to an address reachable from the app container.
+- PostgreSQL session/message storage and browser session restoration are implemented.
+- Persistence against the deployed database still needs an end-to-end verification.
 
 ---
 
@@ -47,13 +49,13 @@ The initial version should focus on:
 - [X] Create the Docker Compose stack for app + PostgreSQL
 - [X] Build the FastAPI app shell and configuration loading
 - [X] Create the initial PostgreSQL schema
-- [ ] Implement PostgreSQL storage/repository layer
-- [ ] Add chat session and message creation/retrieval logic
+- [X] Implement PostgreSQL storage/repository layer
+- [X] Add chat session and message creation/retrieval logic
 - [X] Implement the `/api/chat` streaming endpoint
 - [X] Add the external Ollama API client
 - [X] Build the simple HTML/JS chat frontend
 - [X] Start the Compose services and verify browser access on port 9105
-- [ ] Verify end-to-end model streaming in the browser
+- [X] Verify end-to-end model streaming in the browser
 - [ ] Test the app with persisted history and model streaming
 - [ ] Add Caddy route later once the domain is ready
 - [ ] Document and defer production hardening items
@@ -351,7 +353,7 @@ Tasks:
 
 - define request payload shape
 - create a Python client that calls Ollama
-- pass the conversation history as a sequence of messages
+- load persisted conversation history for the active session
 - stream the token output back to the browser
 - map errors to a friendly frontend message
 
@@ -359,21 +361,20 @@ Suggested request contract:
 
 ```json
 {
-  "messages": [
-    {"role": "user", "content": "Tell me about this setup"}
-  ],
+  "session_id": null,
+  "message": "Tell me about this setup",
   "stream": true,
-  "temperature": 0.7,
-  "max_tokens": 512
+  "temperature": 0.7
 }
 ```
 
 Suggested backend logic:
 
-- build message list from the conversation state
+- create or load a session and persist the new user message
+- build model context from persisted session messages
 - send to Ollama `/api/chat`
 - parse chunked response
-- emit the content to the browser incrementally
+- stream content to the browser and persist the completed assistant message
 
 Important note:
 

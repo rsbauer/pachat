@@ -26,6 +26,8 @@ docker compose up -d --build
 
 The web app is served on port `9105`. Open `http://<server>:9105` from a browser that can reach the server. PostgreSQL is available to the app as `db:5432` on the Compose network. The Compose configuration builds the app's `DATABASE_URL` from the PostgreSQL variables in `.env`.
 
+Chat sessions and messages are stored in PostgreSQL. The browser remembers the active session ID locally and reloads that session's history when the page is reopened. Starting a new chat creates a separate session; previous sessions remain in the database, but there is not yet a UI for browsing them.
+
 This proof of concept does not include authentication. Restrict port `9105` to trusted users/networks; do not expose it publicly until access controls and production hardening are added.
 
 ## Managing the Stack

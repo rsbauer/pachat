@@ -3,9 +3,11 @@ const chatForm = document.getElementById('chat-form');
 const promptInput = document.getElementById('prompt');
 const statusIndicator = document.getElementById('status-indicator');
 const sendButton = document.getElementById('send-button');
+const newChatButton = document.getElementById('new-chat');
 
 const state = {
   messages: [],
+  sessionId: null,
 };
 
 function addMessage(role, text) {
@@ -25,12 +27,44 @@ function setStatus(text) {
   statusIndicator.textContent = text;
 }
 
-function createRequestBody() {
+function createRequestBody(prompt) {
   return {
-    messages: state.messages.map((message) => ({ role: message.role, content: message.content })),
+    message: prompt,
+    session_id: state.sessionId,
     stream: true,
     temperature: 0.7,
   };
+}
+
+async function restoreSession() {
+  const sessionId = localStorage.getItem('pachat.sessionId');
+  if (!sessionId) return;
+
+  try {
+    const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`);
+    if (response.status === 404) {
+      localStorage.removeItem('pachat.sessionId');
+      return;
+    }
+    if (!response.ok) throw new Error('Could not restore chat history');
+
+    const session = await response.json();
+    state.sessionId = session.id;
+    state.messages = session.messages.map(({ role, content }) => ({ role, content }));
+    state.messages.forEach(({ role, content }) => addMessage(role, content));
+  } catch (error) {
+    console.error(error);
+    setStatus('History unavailable');
+  }
+}
+
+function startNewChat() {
+  state.messages = [];
+  state.sessionId = null;
+  localStorage.removeItem('pachat.sessionId');
+  messagesEl.textContent = '';
+  setStatus('Ready');
+  promptInput.focus();
 }
 
 async function sendPrompt(event) {
@@ -45,6 +79,7 @@ async function sendPrompt(event) {
   promptInput.focus();
   setStatus('Generating…');
   sendButton.disabled = true;
+  newChatButton.disabled = true;
 
   const assistantBubble = document.createElement('div');
   assistantBubble.className = 'message assistant';
@@ -60,7 +95,7 @@ async function sendPrompt(event) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(createRequestBody()),
+      body: JSON.stringify(createRequestBody(prompt)),
     });
 
     if (!response.ok || !response.body) {
@@ -88,18 +123,24 @@ async function sendPrompt(event) {
           continue;
         }
 
+        let parsed;
         try {
-          const parsed = JSON.parse(payload);
-          if (parsed.error) {
-            throw new Error(parsed.error);
-          }
-          const text = parsed.content || '';
-          if (text) {
-            bubble.textContent += text;
-            messagesEl.scrollTop = messagesEl.scrollHeight;
-          }
+          parsed = JSON.parse(payload);
         } catch (error) {
           console.error('Invalid stream payload', error);
+          continue;
+        }
+
+        if (parsed.session_id) {
+          state.sessionId = parsed.session_id;
+          localStorage.setItem('pachat.sessionId', state.sessionId);
+        }
+        if (parsed.error) throw new Error(parsed.error);
+
+        const text = parsed.content || '';
+        if (text) {
+          bubble.textContent += text;
+          messagesEl.scrollTop = messagesEl.scrollHeight;
         }
       }
     }
@@ -112,7 +153,10 @@ async function sendPrompt(event) {
     setStatus('Error');
   } finally {
     sendButton.disabled = false;
+    newChatButton.disabled = false;
   }
 }
 
 chatForm.addEventListener('submit', sendPrompt);
+newChatButton.addEventListener('click', startNewChat);
+restoreSession();
