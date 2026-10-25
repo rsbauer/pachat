@@ -35,23 +35,26 @@ The initial version should focus on:
 
 ## Architecture Summary
 
-The system should be split into three logical parts:
+The system should be split into four logical parts:
 
 1. Public web edge
    - Caddy handles TLS and routes a public subdomain
    - Example: `chat.example.com`
    - Only the web app is exposed publicly
 
-2. Application server
-   - Python app serves the frontend and API
-   - Handles conversation and chat request flow
-   - Calls the Ollama API
-   - Streams model output back to browser
+2. Docker Compose app stack
+   - Python app container serves the frontend and API
+   - PostgreSQL container stores chat sessions and messages
+   - Docker Compose keeps the app environment reproducible
 
-3. Ollama host
-   - Runs the model locally
+3. Model host / inference layer
+   - Ollama runs the local model
    - Accepts HTTP requests from the app server
    - Does not need to be publicly exposed
+
+4. Local data layer
+   - PostgreSQL persists conversation history and settings
+   - Keeps the app from losing session data when the process restarts
 
 ---
 
@@ -85,7 +88,58 @@ Deliverable:
 
 ---
 
-### Phase 2: Build the Python backend
+### Phase 2: Create the Docker Compose stack
+
+Goal: get the app and database running in a reproducible local environment.
+
+Services to include:
+
+- `web`: Python app container
+- `db`: PostgreSQL container
+- `ollama` or external model host: model runtime
+- optional `caddy` on the edge box, not necessarily inside Compose
+
+Initial Compose responsibilities:
+
+- expose the Python app on a local port such as `8000`
+- mount app source code for local development
+- define PostgreSQL environment variables
+- create a shared Docker network between the app and database
+
+Example service structure:
+
+```yaml
+services:
+  web:
+    build: ./app
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgres://app:secret@db:5432/pachat
+      OLLAMA_BASE_URL: http://ollama:11434
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: pachat
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
+```
+
+Deliverable:
+
+- app and database start together via `docker compose up`
+
+---
+
+### Phase 3: Build the Python backend
 
 Goal: create the chat API that communicates with Ollama.
 
@@ -143,7 +197,50 @@ Deliverable:
 
 ---
 
-### Phase 3: Build the frontend chat page
+### Phase 4: Add PostgreSQL persistence
+
+Goal: persist chat sessions and message history.
+
+Tasks:
+
+- create the PostgreSQL schema
+- add `chat_sessions`, `chat_messages`, and `app_settings` tables
+- create repository/service functions for session creation and message insertion
+- add retrieval methods for loading message history by session
+- make sure the app can handle missing or empty sessions cleanly
+
+Recommended initial schema:
+
+```sql
+CREATE TABLE chat_sessions (
+    id UUID PRIMARY KEY,
+    title TEXT,
+    model_name TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    status TEXT NOT NULL DEFAULT 'active'
+);
+
+CREATE TABLE chat_messages (
+    id BIGSERIAL PRIMARY KEY,
+    session_id UUID NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    model_name TEXT,
+    token_count INTEGER
+);
+```
+
+This keeps the storage layer simple while supporting real conversation persistence.
+
+Deliverable:
+
+- message history stored in PostgreSQL
+
+---
+
+### Phase 5: Build the frontend chat page
 
 Goal: make a simple browser-based conversation UI.
 
@@ -180,7 +277,7 @@ Deliverable:
 
 ---
 
-### Phase 4: Add Caddy routing
+### Phase 6: Add Caddy routing
 
 Goal: expose the web app externally and reverse proxy it cleanly.
 
@@ -220,7 +317,7 @@ Deliverable:
 
 ---
 
-### Phase 5: Connect frontend and backend to Ollama
+### Phase 7: Connect frontend and backend to Ollama
 
 Goal: make the app actually produce answers from the local model.
 
@@ -263,7 +360,7 @@ Deliverable:
 
 ---
 
-### Phase 6: Test and debug the POC
+### Phase 8: Test and debug the POC
 
 Goal: verify functionality and reliability before expanding.
 
@@ -289,7 +386,7 @@ Deliverable:
 
 ---
 
-### Phase 7: Document the next iteration path
+### Phase 9: Document the next iteration path
 
 Goal: capture the next improvements clearly.
 
@@ -323,6 +420,9 @@ pachat/
     routes.py
     ollama_client.py
     config.py
+    models.py
+    storage.py
+    chat_service.py
   templates/
     index.html
   static/
