@@ -13,15 +13,15 @@ The architecture relies on a decoupled multi-host model where edge routing/SSL t
 ```mermaid
 flowchart TD
     subgraph Edge ["Edge / Gateway Layer (Separate Box)"]
-        Caddy[Caddy Reverse Proxy\n(TLS Termination / Port 443)]
+        Caddy["Caddy Reverse Proxy<br/>(TLS Termination / Port 443)"]
     end
 
     subgraph AppHost ["AI Server Host (Local Network / Docker)"]
         subgraph Docker ["Docker Environment"]
-            FastAPI[FastAPI Web Backend\n(Python / SSE Streamer / Port 8000)]
+            FastAPI["FastAPI Web Backend<br/>(Python / SSE Streamer / Port 8000)"]
         end
-        Ollama[Ollama Inference Engine\n(Port 11434)]
-        Model[(MedGemma 4B GGUF\nModel Storage)]
+        Ollama["Ollama Inference Engine<br/>(Port 11434)"]
+        Model[("MedGemma 4B GGUF<br/>Model Storage")]
     end
 
     User((User Browser)) -->|HTTPS / ai.yourdomain.com| Caddy
