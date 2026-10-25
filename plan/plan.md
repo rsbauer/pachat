@@ -33,24 +33,44 @@ The initial version should focus on:
 
 ---
 
+## Todo Checklist
+
+- [ ] Confirm Ollama model is available and reachable from the app host
+- [ ] Decide the internal app port for the Compose service (default: 8000)
+- [ ] Create the Docker Compose stack for app + PostgreSQL
+- [ ] Build the FastAPI app shell and configuration loading
+- [ ] Implement PostgreSQL schema and storage layer
+- [ ] Add chat session and message creation/retrieval logic
+- [ ] Implement the `/api/chat` streaming endpoint
+- [ ] Connect the backend to the external Ollama API
+- [ ] Build the simple HTML/JS chat frontend
+- [ ] Verify end-to-end POC flow in the browser
+- [ ] Test the app with persisted history and model streaming
+- [ ] Add Caddy route later once the domain is ready
+- [ ] Document and defer production hardening items
+
+---
+
 ## Architecture Summary
 
-The system should be split into four logical parts:
+The system should be split into three logical parts for the proof of concept:
 
 1. Public web edge
    - Caddy handles TLS and routes a public subdomain
    - Example: `chat.example.com`
-   - Only the web app is exposed publicly
+   - This is set up separately later, when the app is ready for the public domain
 
 2. Docker Compose app stack
    - Python app container serves the frontend and API
    - PostgreSQL container stores chat sessions and messages
    - Docker Compose keeps the app environment reproducible
+   - The app will listen on a single internal port such as `8000`
 
-3. Model host / inference layer
-   - Ollama runs the local model
-   - Accepts HTTP requests from the app server
+3. External model host / inference layer
+   - Ollama runs outside Docker and is already available
+   - Accepts HTTP requests from the app server over the internal network
    - Does not need to be publicly exposed
+   - Connection details are provided as configuration values when ready
 
 4. Local data layer
    - PostgreSQL persists conversation history and settings
@@ -62,14 +82,15 @@ The system should be split into four logical parts:
 
 ### Phase 1: Get the model running on Ollama
 
-Goal: verify the model is available and usable locally.
+Goal: verify the model is available and usable locally outside Docker.
 
 Tasks:
 
 - confirm Ollama is installed on the model box
-- pull or configure the target model
+- configure or alias the model for the app
 - verify the model can respond through the Ollama API
 - test the default local endpoint on the model host
+- capture the host/port the app will use from configuration
 
 Example check:
 
@@ -94,29 +115,34 @@ Goal: get the app and database running in a reproducible local environment.
 
 Services to include:
 
-- `web`: Python app container
+- `app`: Python app container
 - `db`: PostgreSQL container
-- `ollama` or external model host: model runtime
-- optional `caddy` on the edge box, not necessarily inside Compose
+
+External runtime not managed by Compose:
+
+- Ollama: already running outside Docker
+- Caddy: configured later on the edge box when the app is ready to expose the domain
 
 Initial Compose responsibilities:
 
-- expose the Python app on a local port such as `8000`
+- expose the Python app on a single internal port such as `8000`
 - mount app source code for local development
 - define PostgreSQL environment variables
 - create a shared Docker network between the app and database
+- define environment variables for the external Ollama host and port
 
 Example service structure:
 
 ```yaml
 services:
-  web:
+  app:
     build: ./app
     ports:
       - "8000:8000"
     environment:
       DATABASE_URL: postgres://app:secret@db:5432/pachat
-      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_BASE_URL: http://<external-ollama-host>:11434
+      OLLAMA_MODEL: medgemma:4b
     depends_on:
       - db
 
@@ -152,9 +178,10 @@ Core responsibilities:
 
 - expose a `/api/chat` endpoint
 - accept a list of messages from the browser
-- call Ollama with `stream=true`
+- call the external Ollama service with `stream=true`
 - forward partial output back to the browser as a stream
 - return an error message if the underlying model call fails
+- fetch session history from PostgreSQL and save messages back to it
 
 Suggested endpoint behavior:
 
@@ -232,7 +259,7 @@ CREATE TABLE chat_messages (
 );
 ```
 
-This keeps the storage layer simple while supporting real conversation persistence.
+This keeps the storage layer simple while supporting real conversation persistence and future multi-session expansion.
 
 Deliverable:
 
@@ -277,30 +304,22 @@ Deliverable:
 
 ---
 
-### Phase 6: Add Caddy routing
+### Phase 6: Add Caddy routing later
 
-Goal: expose the web app externally and reverse proxy it cleanly.
+Goal: prepare the app for public exposure once the domain is ready.
 
-Caddy should do the following:
+Caddy should do the following later:
 
 - handle the site domain
 - provide TLS termination
-- forward requests to the Python app backend
+- forward requests to the Python app backend on the internal app port
 - leave the Ollama service internal-only
 
-Example concept:
+Example concept for later:
 
 ```caddy
 chat.example.com {
     reverse_proxy localhost:8000
-}
-```
-
-If the app is running in Docker, the upstream may be something like:
-
-```caddy
-chat.example.com {
-    reverse_proxy app:8000
 }
 ```
 
@@ -309,11 +328,11 @@ Notes:
 - no need to add authentication yet
 - no need to harden this for production yet
 - keep it simple and testable
-- make sure the app port is not directly exposed to the internet
+- the POC focus is on local app and database behavior, not Caddy configuration details
 
 Deliverable:
 
-- working Caddy config that points the public domain to the app backend
+- a Caddy route ready to be added once the domain is configured
 
 ---
 

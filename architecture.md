@@ -4,9 +4,9 @@
 
 This architecture describes a self-hosted web chat application that exposes a browser-based chat UI to users while running a local LLM through Ollama. The target deployment uses:
 
-- a public edge box running Caddy for TLS termination, subdomain routing, and reverse proxying
-- a Docker Compose deployment on the app host with a Python service and PostgreSQL service
-- an inference host running Ollama and the GGUF model
+- a public edge box running Caddy for TLS termination, subdomain routing, and reverse proxying, but with Caddy setup handled separately after the app is working
+- a single Docker Compose deployment on the app host with a Python service and PostgreSQL service
+- an external Ollama runtime that is already installed and running outside Docker
 - persistent local storage for chat histories and app settings
 
 The goal is to keep the model runtime local, the public attack surface small, and the application easy to extend for future features such as authentication, file uploads, conversation history, or multi-user access.
@@ -15,14 +15,14 @@ The goal is to keep the model runtime local, the public attack surface small, an
 
 ## 2. Docker Compose Deployment Layout
 
-For the proof of concept, the app should run in Docker Compose on the internal app box. This gives a straightforward, portable setup with a dedicated PostgreSQL container and a Python web app container.
+For the proof of concept, the app should run in Docker Compose on the internal app box. This gives a straightforward, portable setup with a dedicated PostgreSQL container and a Python web app container. Ollama is not part of the Compose file for this version and is expected to be already running externally.
 
 ```mermaid
 flowchart LR
     User((User Browser)) -->|HTTPS| Caddy["Caddy\nTLS + Reverse Proxy\nchat.example.com"]
-    Caddy -->|HTTP| App["Python App Container\nFastAPI + Static Frontend"]
+    Caddy -->|HTTP| App["Python App Container\nFastAPI + Static Frontend\ninternal port 8000"]
     App -->|SQL| Postgres[("PostgreSQL\nchat database")]
-    App -->|Internal API| Ollama["Ollama\nModel Runtime\nPrivate LAN or localhost"]
+    App -->|HTTP| Ollama["Ollama\nAlready running externally\nprivate network or LAN"]
     Ollama --> Model[("GGUF model\nmedgemma 4B Q4_K_M")]
 
     style Caddy fill:#2563eb,stroke:#fff,stroke-width:2px,color:#fff
@@ -33,35 +33,39 @@ flowchart LR
 
 Required Docker services for the initial version:
 
-- `web` or `app`: Python app serving the frontend and API
+- `app`: Python app serving the frontend and API
 - `db`: PostgreSQL for chat sessions and messages
-- `ollama` or external model host: runs the model service, optionally in a separate box or a container
-- `caddy`: public reverse proxy on the edge box, not necessarily in the same Compose file
+
+External runtime not managed by Compose:
+
+- Ollama: already installed and running elsewhere
+- Caddy: configured separately on the edge box when the app is ready to receive a public subdomain
 
 ---
 
 ## 3. Deployment Topology
 
-The most practical setup for this scenario is a two-host or three-host architecture:
+For the first version, the simplest and most practical setup is a single Docker Compose stack on the app host:
 
 1. Public edge host (Caddy)
    - Handles `chat.example.com` or similar
    - terminates TLS with Let's Encrypt
-   - proxies traffic to the app backend over the local network
-   - applies rate limiting, request timeouts, and security headers
+   - proxies traffic to the app backend after the app is working
+   - is intentionally out of scope for the initial implementation
 
-2. App host (Python + Docker)
-   - runs the web frontend and API
+2. App host (Python + Docker Compose)
+   - runs the web frontend and API in one container
    - serves HTML/JS to the browser
    - handles chat session state and request orchestration
-   - calls Ollama over HTTP
+   - calls Ollama over HTTP using a configured external host/port
+   - uses PostgreSQL for persistence
 
-3. Model host (Ollama)
-   - runs the GGUF model
-   - exposes the local Ollama API on a private network port
+3. External model host (Ollama)
+   - runs the GGUF model outside Docker
+   - exposes its API on a private network port or local host address
    - is not directly exposed to the internet
 
-This keeps the model and its weights behind a private boundary and prevents direct internet access to Ollama.
+This keeps the model and its weights behind a private boundary and keeps the POC focused on a working chat flow rather than infrastructure complexity.
 
 ```mermaid
 flowchart LR
@@ -120,9 +124,9 @@ The web app should be responsible for:
 - receiving chat requests from the browser
 - validating payload shape
 - adding system prompts or safety instructions
-- calling the Ollama API with the model name and generation parameters
+- calling the external Ollama API using a configured endpoint
 - streaming tokens back to the browser
-- persisting chat history and metadata if needed
+- persisting chat history and metadata in PostgreSQL
 
 A simple PHP app could also work, but Python is more natural for streaming and LLM integration.
 
@@ -140,9 +144,9 @@ Responsibilities:
 The target model should be represented as a local tag or a pinned model reference, for example:
 
 - a locally tagged model name such as `medgemma:4b`
-- or the exact Hugging Face-backed model name supported by your Ollama setup
+- or a custom alias managed by the Ollama runtime
 
-If the exact `hf.co/...` identifier is not directly accepted in your Ollama version, a local `Modelfile` or alias is a safer route.
+If the exact `hf.co/...` identifier is not directly accepted in your Ollama version, a local `Modelfile` or alias is a safer route. For this project, the alias approach is preferred and should be controlled by configuration rather than hardcoded in the app.
 
 ### D. Persistence Layer (`PostgreSQL`)
 
@@ -164,7 +168,7 @@ Suggested PostgreSQL tables:
 - `chat_messages`
 - `app_settings`
 
-The database should not store authentication-sensitive data in the first version because auth is intentionally out of scope.
+The database should not store authentication-sensitive data in the first version because auth is intentionally out of scope. The schema is intentionally minimal but forward-looking for future multi-user and multi-session support.
 
 ---
 
@@ -179,8 +183,8 @@ sequenceDiagram
     participant Browser as Browser UI
     participant Caddy as Caddy
     participant App as Python App
-    participant DB as SQLite/Postgres (optional)
-    participant Ollama as Ollama API
+    participant DB as PostgreSQL
+    participant Ollama as External Ollama API
     participant Model as GGUF Model
 
     User->>Browser: Enter prompt and send
@@ -379,7 +383,7 @@ app/
     app.js
 ```
 
-This separation keeps the app easy to test: the HTTP layer, business logic, and model provider integration are isolated.
+This separation keeps the app easy to test: the HTTP layer, business logic, storage layer, and external model provider are isolated.
 
 ### 9.1 `main.py`
 
@@ -484,7 +488,7 @@ Responsibilities:
 - add optional system prompts or conversation context
 - persist conversation data if enabled
 
-This is the core logic of the app. It acts as the coordinator between the HTTP-facing API and the LLM integration.
+This is the core logic of the app. It acts as the coordinator between the HTTP-facing API, PostgreSQL storage, and the external Ollama integration.
 
 Pseudo-signature:
 
