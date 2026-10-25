@@ -15,7 +15,7 @@ The app should be built in a way that is easy to extend later for persistence, a
 - The FastAPI shell, browser UI, `/api/chat` streaming route, Ollama client, and initial PostgreSQL schema are implemented.
 - End-to-end model streaming has been verified in the browser after setting `OLLAMA_BASE_URL` to an address reachable from the app container.
 - PostgreSQL session/message storage and browser session restoration are implemented.
-- Persistence against the deployed database still needs an end-to-end verification.
+- Chat persistence has been verified against the deployed database.
 
 ---
 
@@ -56,9 +56,9 @@ The initial version should focus on:
 - [X] Build the simple HTML/JS chat frontend
 - [X] Start the Compose services and verify browser access on port 9105
 - [X] Verify end-to-end model streaming in the browser
-- [ ] Test the app with persisted history and model streaming
-- [ ] Add Caddy route later once the domain is ready
-- [ ] Document and defer production hardening items
+- [X] Test the app with persisted history and model streaming
+- [X] Add Caddy route later once the domain is ready
+- [X] Document and defer production hardening items (see [hardening.md](hardening.md))
 
 ---
 
@@ -69,7 +69,7 @@ The system should be split into three logical parts for the proof of concept:
 1. Public web edge
    - Caddy handles TLS and routes a public subdomain
    - Example: `chat.example.com`
-   - This is set up separately later, when the app is ready for the public domain
+  - The route is configured and working; further access controls and hardening remain tracked in [hardening.md](hardening.md)
 
 2. Docker Compose app stack
    - Python app container serves the frontend and API
