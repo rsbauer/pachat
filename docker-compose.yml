@@ -14,8 +14,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      clamav:
+        condition: service_healthy
     volumes:
       - ./app:/app
+      - uploads_data:/data/uploads
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -37,5 +40,19 @@ services:
       timeout: 5s
       retries: 10
 
+  clamav:
+    image: clamav/clamav:1.4
+    container_name: pachat-clamav
+    environment:
+      CLAMD_CONF_MaxFileSize: 100M
+      CLAMD_CONF_StreamMaxLength: 100M
+    healthcheck:
+      test: ["CMD", "clamdscan", "--ping=1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 2m
+
 volumes:
   postgres_data:
+  uploads_data:

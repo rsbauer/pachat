@@ -2,17 +2,58 @@ import json
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
 from config import settings
+from intake import (
+    MAX_FILE_COUNT,
+    MAX_UPLOAD_SIZE,
+    ScannerUnavailableError,
+    store_documents,
+)
 from models import ChatRequest
 from ollama_client import stream_chat
 from storage import SessionNotFoundError, get_session, prepare_chat, save_assistant_message
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+@router.post("/api/uploads")
+async def api_upload_documents(files: list[UploadFile] = File(...)):
+    if not files:
+        raise HTTPException(status_code=400, detail="Select at least one file")
+    if len(files) > MAX_FILE_COUNT:
+        raise HTTPException(status_code=413, detail=f"Upload no more than {MAX_FILE_COUNT} files at a time")
+
+    payloads = []
+    total_size = 0
+    for upload in files:
+        content = await upload.read(MAX_UPLOAD_SIZE + 1)
+        total_size += len(content)
+        if len(content) > MAX_UPLOAD_SIZE or total_size > MAX_UPLOAD_SIZE:
+            raise HTTPException(status_code=413, detail="Total upload size exceeds 100 MB")
+        payloads.append((upload.filename or "", content))
+
+    try:
+        return await run_in_threadpool(
+            store_documents,
+            payloads,
+            settings.UPLOAD_DIR,
+            settings.CLAMAV_HOST,
+            settings.CLAMAV_PORT,
+            settings.FILE_ENCRYPTION_ENABLED,
+            settings.FILE_ENCRYPTION_KEY,
+        )
+    except ScannerUnavailableError as exc:
+        raise HTTPException(status_code=503, detail="Virus scanning is unavailable; no files were saved") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Failed to save uploaded documents")
+        raise HTTPException(status_code=503, detail="Uploaded files could not be saved") from exc
 
 
 @router.get("/api/health")

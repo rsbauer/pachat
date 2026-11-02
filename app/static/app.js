@@ -4,6 +4,11 @@ const promptInput = document.getElementById('prompt');
 const statusIndicator = document.getElementById('status-indicator');
 const sendButton = document.getElementById('send-button');
 const newChatButton = document.getElementById('new-chat');
+const uploadForm = document.getElementById('upload-form');
+const documentFiles = document.getElementById('document-files');
+const uploadStatus = document.getElementById('upload-status');
+const uploadResults = document.getElementById('upload-results');
+const uploadButton = document.getElementById('upload-button');
 
 const state = {
   messages: [],
@@ -157,6 +162,44 @@ async function sendPrompt(event) {
   }
 }
 
+async function uploadDocuments(event) {
+  event.preventDefault();
+  if (!documentFiles.files.length) {
+    uploadStatus.textContent = 'Select one or more files first.';
+    return;
+  }
+
+  const formData = new FormData();
+  for (const file of documentFiles.files) formData.append('files', file);
+  uploadButton.disabled = true;
+  uploadStatus.textContent = 'Scanning and saving files…';
+  uploadResults.textContent = '';
+
+  try {
+    const response = await fetch('/api/uploads', { method: 'POST', body: formData });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail || 'Upload failed');
+
+    for (const file of result.uploaded) {
+      const item = document.createElement('li');
+      item.textContent = `Saved: ${file.filename}`;
+      uploadResults.appendChild(item);
+    }
+    for (const file of result.rejected) {
+      const item = document.createElement('li');
+      item.textContent = `Not saved: ${file.filename} (${file.reason})`;
+      uploadResults.appendChild(item);
+    }
+    uploadStatus.textContent = `${result.uploaded.length} file(s) saved.`;
+    documentFiles.value = '';
+  } catch (error) {
+    uploadStatus.textContent = error.message;
+  } finally {
+    uploadButton.disabled = false;
+  }
+}
+
 chatForm.addEventListener('submit', sendPrompt);
+uploadForm.addEventListener('submit', uploadDocuments);
 newChatButton.addEventListener('click', startNewChat);
 restoreSession();

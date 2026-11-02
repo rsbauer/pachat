@@ -1,11 +1,21 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
+from starlette.concurrency import run_in_threadpool
 
+from database import init_db
 from routes import router
 
-app = FastAPI(title="Pachat", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await run_in_threadpool(init_db)
+    yield
+
+
+app = FastAPI(title="Pachat", version="0.1.0", lifespan=lifespan)
 app.include_router(router)
 
 base_dir = Path(__file__).resolve().parent

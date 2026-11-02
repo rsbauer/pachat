@@ -18,6 +18,15 @@
       </aside>
 
       <section class="chat-panel">
+        <form id="upload-form" class="intake-form">
+          <label for="document-files">Add case documents</label>
+          <div class="intake-controls">
+            <input id="document-files" name="files" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png,.tif,.txt,.rtf,.md,.markdown,.csv,.tsv,.log,.json,.xml,.yaml,.yml,.zip,text/*,image/*" />
+            <button type="submit" id="upload-button">Upload</button>
+          </div>
+          <p id="upload-status" aria-live="polite">PDF, Office, image, and text files are accepted. ZIP archives are unpacked before scanning.</p>
+          <ul id="upload-results" aria-live="polite"></ul>
+        </form>
         <div id="messages" class="messages" aria-live="polite"></div>
 
         <form id="chat-form" class="composer">
