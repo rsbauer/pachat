@@ -18,7 +18,7 @@ services:
         condition: service_healthy
     volumes:
       - ./app:/app
-      - uploads_data:/data/uploads
+      - ./uploads_data:/data/uploads
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -55,4 +55,3 @@ services:
 
 volumes:
   postgres_data:
-  uploads_data:
