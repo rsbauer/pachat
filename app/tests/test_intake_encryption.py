@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from cryptography.fernet import Fernet
 
-from intake import encrypt_existing_documents, get_user_document, store_documents
+from intake import _file_cipher, encrypt_existing_documents, get_user_document, store_documents
 
 
 class FakeCursor:
@@ -53,6 +53,10 @@ class FileEncryptionTests(unittest.TestCase):
     def setUp(self):
         self.key = Fernet.generate_key().decode("ascii")
         self.cipher = Fernet(self.key.encode("ascii"))
+
+    def test_invalid_key_reports_fernet_format_requirement(self):
+        with self.assertRaisesRegex(ValueError, "URL-safe base64 Fernet key"):
+            _file_cipher("not-a-fernet-key")
 
     def test_existing_plaintext_file_is_migrated_and_permissions_restricted(self):
         user_id = uuid4()

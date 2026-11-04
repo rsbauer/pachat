@@ -31,7 +31,9 @@ def _file_cipher(key: str) -> Fernet:
     try:
         return Fernet(key.encode("ascii"))
     except (TypeError, ValueError) as exc:
-        raise ValueError("FILE_ENCRYPTION_KEY must be a valid Fernet key") from exc
+        raise ValueError(
+            "FILE_ENCRYPTION_KEY must be a URL-safe base64 Fernet key generated from 32 random bytes"
+        ) from exc
 
 
 def encrypt_existing_documents(upload_dir: str, encryption_key: str) -> int:
