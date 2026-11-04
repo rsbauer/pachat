@@ -5,13 +5,21 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from starlette.concurrency import run_in_threadpool
 
+from config import settings
 from database import init_db
+from intake import encrypt_existing_documents
 from routes import router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await run_in_threadpool(init_db)
+    if settings.FILE_ENCRYPTION_ENABLED:
+        await run_in_threadpool(
+            encrypt_existing_documents,
+            settings.UPLOAD_DIR,
+            settings.FILE_ENCRYPTION_KEY,
+        )
     yield
 
 

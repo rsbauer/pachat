@@ -21,7 +21,7 @@ class Settings:
     UPLOAD_DIR = get_setting("UPLOAD_DIR", "/data/uploads")
     CLAMAV_HOST = get_setting("CLAMAV_HOST", "clamav")
     CLAMAV_PORT = int(get_setting("CLAMAV_PORT", "3310"))
-    FILE_ENCRYPTION_ENABLED = get_setting("FILE_ENCRYPTION_ENABLED", "false").lower() == "true"
+    FILE_ENCRYPTION_ENABLED = get_setting("FILE_ENCRYPTION_ENABLED", "true").lower() == "true"
     FILE_ENCRYPTION_KEY = get_setting("FILE_ENCRYPTION_KEY", "")
 
 

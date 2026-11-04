@@ -4,6 +4,7 @@ import mimetypes
 import os
 import socket
 import struct
+import tempfile
 import zipfile
 from io import BytesIO
 from pathlib import Path, PurePosixPath
@@ -22,6 +23,63 @@ TEXT_EXTENSIONS = {".md", ".markdown", ".csv", ".tsv", ".log", ".json", ".xml", 
 
 class ScannerUnavailableError(Exception):
     pass
+
+
+def _file_cipher(key: str) -> Fernet:
+    if not key:
+        raise ValueError("FILE_ENCRYPTION_KEY is required when file encryption is enabled")
+    try:
+        return Fernet(key.encode("ascii"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("FILE_ENCRYPTION_KEY must be a valid Fernet key") from exc
+
+
+def encrypt_existing_documents(upload_dir: str, encryption_key: str) -> int:
+    cipher = _file_cipher(encryption_key)
+    root = Path(upload_dir)
+    migrated = 0
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT id, user_id, stored_name FROM uploaded_documents WHERE is_encrypted = FALSE"
+            )
+            documents = cursor.fetchall()
+
+            for document_id, user_id, stored_name in documents:
+                if Path(stored_name).name != stored_name:
+                    raise ValueError("Invalid stored document name")
+                path = root / str(user_id) / stored_name
+                content = path.read_bytes()
+                try:
+                    cipher.decrypt(content)
+                    encrypted_content = content
+                except InvalidToken as exc:
+                    if content.startswith(b"gAAAA"):
+                        raise ValueError("The configured encryption key cannot migrate an encrypted document") from exc
+                    encrypted_content = cipher.encrypt(content)
+
+                if encrypted_content != content:
+                    temporary_path = None
+                    try:
+                        with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".pachat-encrypt-", delete=False) as temporary:
+                            temporary_path = Path(temporary.name)
+                            os.chmod(temporary_path, 0o600)
+                            temporary.write(encrypted_content)
+                            temporary.flush()
+                            os.fsync(temporary.fileno())
+                        os.replace(temporary_path, path)
+                    finally:
+                        if temporary_path is not None:
+                            temporary_path.unlink(missing_ok=True)
+
+                cursor.execute(
+                    "UPDATE uploaded_documents SET is_encrypted = TRUE WHERE id = %s AND user_id = %s",
+                    (document_id, user_id),
+                )
+                migrated += 1
+
+    return migrated
 
 
 def is_acceptable_document(filename: str, content: bytes | None = None) -> bool:
@@ -70,8 +128,8 @@ def scan_with_clamav(content: bytes, host: str, port: int) -> bool:
 
 def decrypt_document(content: bytes, key: str) -> bytes:
     try:
-        return Fernet(key.encode("ascii")).decrypt(content)
-    except (ValueError, InvalidToken) as exc:
+        return _file_cipher(key).decrypt(content)
+    except (TypeError, ValueError, InvalidToken) as exc:
         raise ValueError("The configured encryption key cannot decrypt this document") from exc
 
 
@@ -132,13 +190,8 @@ def store_documents(
     encryption_key: str,
 ) -> dict:
     cipher = None
-    if encryption_enabled and not encryption_key:
-        raise ValueError("FILE_ENCRYPTION_KEY is required when file encryption is enabled")
     if encryption_enabled:
-        try:
-            cipher = Fernet(encryption_key.encode("ascii"))
-        except (TypeError, ValueError) as exc:
-            raise ValueError("FILE_ENCRYPTION_KEY must be a valid Fernet key") from exc
+        cipher = _file_cipher(encryption_key)
 
     documents, rejected = _document_entries(payloads)
     scanned = []
