@@ -65,7 +65,7 @@ function setAuthMode(mode) {
     : 'Sign in with your username and password.';
   authSubmit.textContent = registering ? 'Create account' : 'Sign in';
   authPassword.autocomplete = registering ? 'new-password' : 'current-password';
-  authPassword.minLength = registering ? 12 : 1;
+  authPassword.minLength = registering ? 10 : 1;
   authPasswordConfirm.hidden = !registering;
   authPasswordConfirm.required = registering;
   confirmPasswordLabel.hidden = !registering;

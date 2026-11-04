@@ -33,9 +33,9 @@
             <input id="auth-username" name="username" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9](?:[A-Za-z0-9._]|-)*" autocomplete="username" required />
             <label for="auth-password">Password</label>
             <input id="auth-password" name="password" type="password" maxlength="128" autocomplete="current-password" required />
-            <p id="password-requirement" class="field-hint" hidden>Use at least 12 characters.</p>
+            <p id="password-requirement" class="field-hint" hidden>Use at least 10 characters.</p>
             <label id="confirm-password-label" for="auth-password-confirm" hidden>Confirm password</label>
-            <input id="auth-password-confirm" type="password" minlength="12" maxlength="128" autocomplete="new-password" hidden />
+            <input id="auth-password-confirm" type="password" minlength="10" maxlength="128" autocomplete="new-password" hidden />
             <p id="auth-error" class="form-error" role="alert" hidden></p>
             <button id="auth-submit" class="primary-button" type="submit">Sign in</button>
           </form>
@@ -129,10 +129,10 @@
         <label for="current-password">Current password</label>
         <input id="current-password" type="password" autocomplete="current-password" maxlength="128" required />
         <label for="new-password">New password</label>
-        <input id="new-password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required />
+        <input id="new-password" type="password" autocomplete="new-password" minlength="10" maxlength="128" required />
         <label for="confirm-new-password">Confirm new password</label>
-        <input id="confirm-new-password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required />
-        <p class="field-hint">Use at least 12 characters.</p>
+        <input id="confirm-new-password" type="password" autocomplete="new-password" minlength="10" maxlength="128" required />
+        <p class="field-hint">Use at least 10 characters.</p>
         <p id="password-status" class="dialog-status" role="status"></p>
         <button class="primary-button" type="submit">Update password</button>
       </form>

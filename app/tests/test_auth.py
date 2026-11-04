@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from auth import _password_matches, create_session, password_hash
-from models import RegisterRequest
+from models import PasswordUpdate, RegisterRequest
 from routes import router
 from storage import get_session
 
@@ -27,7 +27,16 @@ class PasswordTests(unittest.TestCase):
 
     def test_registration_requires_a_long_password(self):
         with self.assertRaises(ValidationError):
-            RegisterRequest(username="patient.test", password="short")
+            RegisterRequest(username="patient.test", password="123456789")
+
+        self.assertEqual(RegisterRequest(username="patient.test", password="1234567890").password, "1234567890")
+
+    def test_password_change_requires_at_least_ten_characters(self):
+        with self.assertRaises(ValidationError):
+            PasswordUpdate(current_password="current", new_password="123456789")
+
+        update = PasswordUpdate(current_password="current", new_password="1234567890")
+        self.assertEqual(update.new_password, "1234567890")
 
 
 class SessionTests(unittest.TestCase):

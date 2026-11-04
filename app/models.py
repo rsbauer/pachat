@@ -25,7 +25,7 @@ class ChatResponse(BaseModel):
 
 class RegisterRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=32, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
-    password: str = Field(..., min_length=12, max_length=128)
+    password: str = Field(..., min_length=10, max_length=128)
 
 
 class LoginRequest(BaseModel):
@@ -39,4 +39,4 @@ class ProfileUpdate(BaseModel):
 
 class PasswordUpdate(BaseModel):
     current_password: str = Field(..., min_length=1, max_length=128)
-    new_password: str = Field(..., min_length=12, max_length=128)
+    new_password: str = Field(..., min_length=10, max_length=128)
