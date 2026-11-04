@@ -8,7 +8,43 @@
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
-    <main class="app-shell">
+    <section id="auth-screen" class="auth-screen">
+      <div class="auth-layout">
+        <aside class="auth-intro">
+          <div class="auth-brand">
+            <span class="brand-mark" aria-hidden="true">P</span>
+            <span>Pachat</span>
+          </div>
+          <p class="auth-eyebrow">Patient advocate</p>
+          <h1>A calmer place to work through care questions.</h1>
+          <p class="auth-intro-note">Sign in to continue to your conversations and case documents.</p>
+          <p class="auth-disclaimer">For care guidance and organization. Not for emergencies or a replacement for your care team.</p>
+        </aside>
+        <div class="auth-content">
+          <p class="eyebrow">Patient access</p>
+          <h2 id="auth-title">Welcome back</h2>
+          <p id="auth-description" class="auth-description">Sign in with your username and password.</p>
+          <div class="auth-tabs" role="group" aria-label="Account access">
+            <button id="show-login" class="auth-tab is-active" type="button" aria-pressed="true">Sign in</button>
+            <button id="show-register" class="auth-tab" type="button" aria-pressed="false">Create account</button>
+          </div>
+          <form id="auth-form" class="auth-form">
+            <label for="auth-username">Username</label>
+            <input id="auth-username" name="username" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9](?:[A-Za-z0-9._]|-)*" autocomplete="username" required />
+            <label for="auth-password">Password</label>
+            <input id="auth-password" name="password" type="password" maxlength="128" autocomplete="current-password" required />
+            <p id="password-requirement" class="field-hint" hidden>Use at least 12 characters.</p>
+            <label id="confirm-password-label" for="auth-password-confirm" hidden>Confirm password</label>
+            <input id="auth-password-confirm" type="password" minlength="12" maxlength="128" autocomplete="new-password" hidden />
+            <p id="auth-error" class="form-error" role="alert" hidden></p>
+            <button id="auth-submit" class="primary-button" type="submit">Sign in</button>
+          </form>
+          <p class="auth-footnote">Use a password you do not use on another site.</p>
+        </div>
+      </div>
+    </section>
+
+    <main id="app-shell" class="app-shell" hidden>
       <aside class="sidebar" aria-label="Pachat navigation">
         <div class="brand">
           <span class="brand-mark" aria-hidden="true">P</span>
@@ -18,12 +54,19 @@
           </div>
         </div>
         <button id="new-chat" class="secondary-button" type="button">+ New conversation</button>
+        <nav class="account-actions" aria-label="Account">
+          <button id="files-open" class="sidebar-action" type="button">My files</button>
+          <button id="profile-open" class="sidebar-action" type="button">Profile and password</button>
+        </nav>
         <div class="sidebar-spacer"></div>
         <div class="status-box">
           <span class="status-label">Assistant status</span>
           <strong id="status-indicator" role="status" aria-live="polite">Ready</strong>
         </div>
-        <p class="sidebar-note">Share only the details needed for your question.</p>
+        <div class="account-footer">
+          <span id="account-display-name"></span>
+          <button id="logout" class="text-button" type="button">Sign out</button>
+        </div>
       </aside>
 
       <section class="chat-panel" aria-label="Patient advocate chat">
@@ -63,6 +106,50 @@
         </form>
       </section>
     </main>
+
+    <dialog id="profile-dialog" class="account-dialog" aria-labelledby="profile-title">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Account</p>
+          <h2 id="profile-title">Your profile</h2>
+        </div>
+        <button class="dialog-close" type="button" data-close-dialog="profile-dialog" aria-label="Close profile">×</button>
+      </div>
+      <form id="profile-form" class="dialog-form">
+        <label for="profile-username">Username</label>
+        <input id="profile-username" type="text" readonly />
+        <label for="profile-display-name">Display name</label>
+        <input id="profile-display-name" type="text" maxlength="80" required />
+        <p id="profile-status" class="dialog-status" role="status"></p>
+        <button class="primary-button" type="submit">Save profile</button>
+      </form>
+      <hr />
+      <form id="password-form" class="dialog-form">
+        <h3>Change password</h3>
+        <label for="current-password">Current password</label>
+        <input id="current-password" type="password" autocomplete="current-password" maxlength="128" required />
+        <label for="new-password">New password</label>
+        <input id="new-password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required />
+        <label for="confirm-new-password">Confirm new password</label>
+        <input id="confirm-new-password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required />
+        <p class="field-hint">Use at least 12 characters.</p>
+        <p id="password-status" class="dialog-status" role="status"></p>
+        <button class="primary-button" type="submit">Update password</button>
+      </form>
+    </dialog>
+
+    <dialog id="files-dialog" class="account-dialog" aria-labelledby="files-title">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Documents</p>
+          <h2 id="files-title">My files</h2>
+        </div>
+        <button class="dialog-close" type="button" data-close-dialog="files-dialog" aria-label="Close files">×</button>
+      </div>
+      <p class="files-note">Files are only available to your signed-in account.</p>
+      <p id="files-status" class="dialog-status" role="status"></p>
+      <ul id="managed-files" class="managed-files"></ul>
+    </dialog>
 
     <script src="/static/app.js"></script>
   </body>

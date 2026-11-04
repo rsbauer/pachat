@@ -1,19 +1,36 @@
 import json
 import logging
+from pathlib import Path
+from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
+from auth import (
+    SESSION_COOKIE,
+    UsernameTakenError,
+    authenticate_user,
+    change_password,
+    create_account,
+    create_session,
+    get_current_user,
+    revoke_session,
+    set_session_cookie,
+    update_display_name,
+)
 from config import settings
 from intake import (
     MAX_FILE_COUNT,
     MAX_UPLOAD_SIZE,
     ScannerUnavailableError,
+    delete_user_document,
+    get_user_document,
+    list_user_documents,
     store_documents,
 )
-from models import ChatRequest
+from models import ChatRequest, LoginRequest, PasswordUpdate, ProfileUpdate, RegisterRequest
 from ollama_client import stream_chat
 from storage import SessionNotFoundError, get_session, prepare_chat, save_assistant_message
 
@@ -21,8 +38,66 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _public_user(user: dict) -> dict:
+    return {"id": str(user["id"]), "username": user["username"], "display_name": user["display_name"], "role": user["role"]}
+
+
+@router.post("/api/auth/register", status_code=201)
+async def api_register(payload: RegisterRequest, response: Response):
+    username = payload.username.lower()
+    try:
+        user = await run_in_threadpool(create_account, username, payload.password)
+    except UsernameTakenError as exc:
+        raise HTTPException(status_code=409, detail="That username is already in use") from exc
+    token = await run_in_threadpool(create_session, user["id"])
+    set_session_cookie(response, token)
+    return _public_user(user)
+
+
+@router.post("/api/auth/login")
+async def api_login(payload: LoginRequest, response: Response):
+    user = await run_in_threadpool(authenticate_user, payload.username.lower(), payload.password)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Username or password is incorrect")
+    token = await run_in_threadpool(create_session, user["id"])
+    set_session_cookie(response, token)
+    return _public_user(user)
+
+
+@router.post("/api/auth/logout")
+async def api_logout(request: Request, response: Response):
+    token = request.cookies.get(SESSION_COOKIE)
+    if token:
+        await run_in_threadpool(revoke_session, token)
+    response.delete_cookie(SESSION_COOKIE, path="/", httponly=True, samesite="lax")
+    return {"status": "ok"}
+
+
+@router.get("/api/auth/me")
+async def api_current_user(user: dict = Depends(get_current_user)):
+    return _public_user(user)
+
+
+@router.patch("/api/auth/profile")
+async def api_update_profile(payload: ProfileUpdate, user: dict = Depends(get_current_user)):
+    updated = await run_in_threadpool(update_display_name, user["id"], payload.display_name)
+    return _public_user(updated)
+
+
+@router.post("/api/auth/password")
+async def api_change_password(payload: PasswordUpdate, request: Request, response: Response, user: dict = Depends(get_current_user)):
+    new_token = await run_in_threadpool(
+        change_password,
+        user["id"],
+        payload.current_password,
+        payload.new_password,
+    )
+    set_session_cookie(response, new_token)
+    return {"status": "ok"}
+
+
 @router.post("/api/uploads")
-async def api_upload_documents(files: list[UploadFile] = File(...)):
+async def api_upload_documents(files: list[UploadFile] = File(...), user: dict = Depends(get_current_user)):
     if not files:
         raise HTTPException(status_code=400, detail="Select at least one file")
     if len(files) > MAX_FILE_COUNT:
@@ -41,6 +116,7 @@ async def api_upload_documents(files: list[UploadFile] = File(...)):
         return await run_in_threadpool(
             store_documents,
             payloads,
+            user["id"],
             settings.UPLOAD_DIR,
             settings.CLAMAV_HOST,
             settings.CLAMAV_PORT,
@@ -56,6 +132,47 @@ async def api_upload_documents(files: list[UploadFile] = File(...)):
         raise HTTPException(status_code=503, detail="Uploaded files could not be saved") from exc
 
 
+@router.get("/api/files")
+async def api_list_files(user: dict = Depends(get_current_user)):
+    return await run_in_threadpool(list_user_documents, user["id"])
+
+
+@router.get("/api/files/{document_id}")
+async def api_view_file(document_id: UUID, user: dict = Depends(get_current_user)):
+    try:
+        document = await run_in_threadpool(
+            get_user_document,
+            user["id"],
+            document_id,
+            settings.UPLOAD_DIR,
+            settings.FILE_ENCRYPTION_KEY,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="File not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail="File could not be opened") from exc
+    if document is None:
+        raise HTTPException(status_code=404, detail="File not found")
+    filename = quote(Path(document["filename"]).name, safe="")
+    return Response(
+        content=document["content"],
+        media_type=document["mime_type"],
+        headers={
+            "Content-Disposition": f"inline; filename*=UTF-8''{filename}",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "sandbox; default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'",
+        },
+    )
+
+
+@router.delete("/api/files/{document_id}")
+async def api_delete_file(document_id: UUID, user: dict = Depends(get_current_user)):
+    deleted = await run_in_threadpool(delete_user_document, user["id"], document_id, settings.UPLOAD_DIR)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="File not found")
+    return {"status": "deleted"}
+
+
 @router.get("/api/health")
 async def api_health() -> dict[str, str]:
     return {
@@ -66,20 +183,20 @@ async def api_health() -> dict[str, str]:
 
 
 @router.get("/api/models")
-async def api_models() -> dict[str, list[str]]:
+async def api_models(user: dict = Depends(get_current_user)) -> dict[str, list[str]]:
     return {"models": [settings.OLLAMA_MODEL]}
 
 
 @router.get("/api/sessions/{session_id}")
-async def api_get_session(session_id: UUID):
-    session = await run_in_threadpool(get_session, session_id)
+async def api_get_session(session_id: UUID, user: dict = Depends(get_current_user)):
+    session = await run_in_threadpool(get_session, user["id"], session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
 
 
 @router.post("/api/chat")
-async def api_chat(request: ChatRequest):
+async def api_chat(request: ChatRequest, user: dict = Depends(get_current_user)):
     user_message = request.message.strip()
     if not user_message:
         raise HTTPException(status_code=400, detail="Message cannot be empty")
@@ -87,6 +204,7 @@ async def api_chat(request: ChatRequest):
     try:
         session_id, messages = await run_in_threadpool(
             prepare_chat,
+            user["id"],
             request.session_id,
             user_message,
             settings.OLLAMA_MODEL,
@@ -116,6 +234,7 @@ async def api_chat(request: ChatRequest):
                 try:
                     await run_in_threadpool(
                         save_assistant_message,
+                        user["id"],
                         session_id,
                         "".join(response_parts),
                         settings.OLLAMA_MODEL,

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from uuid import UUID, uuid4
 
 from database import get_db_connection
@@ -8,6 +10,7 @@ class SessionNotFoundError(Exception):
 
 
 def prepare_chat(
+    user_id: UUID,
     session_id: UUID | None,
     user_message: str,
     model_name: str,
@@ -18,16 +21,16 @@ def prepare_chat(
                 session_id = uuid4()
                 cursor.execute(
                     """
-                    INSERT INTO chat_sessions (id, title, model_name)
-                    VALUES (%s, %s, %s)
+                    INSERT INTO chat_sessions (id, user_id, title, model_name)
+                    VALUES (%s, %s, %s, %s)
                     """,
-                    (session_id, user_message[:80], model_name),
+                    (session_id, user_id, user_message[:80], model_name),
                 )
                 messages: list[dict[str, str]] = []
             else:
                 cursor.execute(
-                    "SELECT status FROM chat_sessions WHERE id = %s",
-                    (session_id,),
+                    "SELECT status FROM chat_sessions WHERE id = %s AND user_id = %s",
+                    (session_id, user_id),
                 )
                 session = cursor.fetchone()
                 if session is None or session[0] != "active":
@@ -63,32 +66,34 @@ def prepare_chat(
     return session_id, messages
 
 
-def save_assistant_message(session_id: UUID, content: str, model_name: str) -> None:
+def save_assistant_message(user_id: UUID, session_id: UUID, content: str, model_name: str) -> None:
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
                 """
                 INSERT INTO chat_messages (session_id, role, content, model_name)
-                VALUES (%s, 'assistant', %s, %s)
+                SELECT id, 'assistant', %s, %s FROM chat_sessions
+                WHERE id = %s AND user_id = %s
                 """,
-                (session_id, content, model_name),
+                (content, model_name, session_id, user_id),
             )
-            cursor.execute(
-                "UPDATE chat_sessions SET updated_at = NOW() WHERE id = %s",
-                (session_id,),
-            )
+            if cursor.rowcount:
+                cursor.execute(
+                    "UPDATE chat_sessions SET updated_at = NOW() WHERE id = %s AND user_id = %s",
+                    (session_id, user_id),
+                )
 
 
-def get_session(session_id: UUID) -> dict | None:
+def get_session(user_id: UUID, session_id: UUID) -> dict | None:
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
                 """
                 SELECT title, model_name, created_at, updated_at
                 FROM chat_sessions
-                WHERE id = %s AND status = 'active'
+                WHERE id = %s AND user_id = %s AND status = 'active'
                 """,
-                (session_id,),
+                (session_id, user_id),
             )
             session = cursor.fetchone()
             if session is None:

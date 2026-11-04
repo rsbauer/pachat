@@ -13,7 +13,6 @@ from cryptography.fernet import Fernet, InvalidToken
 
 from database import get_db_connection
 
-PLACEHOLDER_USER_ID = UUID("00000000-0000-0000-0000-000000000001")
 MAX_UPLOAD_SIZE = 100 * 1024 * 1024
 MAX_FILE_COUNT = 100
 MAX_ARCHIVE_ITEMS = 100
@@ -125,6 +124,7 @@ def _document_entries(payloads: list[tuple[str, bytes]]) -> tuple[list[tuple[str
 
 def store_documents(
     payloads: list[tuple[str, bytes]],
+    user_id: UUID,
     upload_dir: str,
     scanner_host: str,
     scanner_port: int,
@@ -152,7 +152,7 @@ def store_documents(
         return {"uploaded": [], "rejected": rejected}
 
     stored = []
-    user_dir = Path(upload_dir) / str(PLACEHOLDER_USER_ID)
+    user_dir = Path(upload_dir) / str(user_id)
     user_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(user_dir, 0o700)
     created_paths = []
@@ -183,7 +183,7 @@ def store_documents(
                             (id, user_id, original_name, stored_name, mime_type, size_bytes, is_encrypted)
                         VALUES (%s, %s, %s, %s, %s, %s, %s)
                         """,
-                        (document_id, PLACEHOLDER_USER_ID, filename, stored_name, mime_type, len(content), encryption_enabled),
+                        (document_id, user_id, filename, stored_name, mime_type, len(content), encryption_enabled),
                     )
                     stored.append({"id": str(document_id), "filename": filename, "size_bytes": len(content)})
     except Exception:
@@ -192,3 +192,63 @@ def store_documents(
         raise
 
     return {"uploaded": stored, "rejected": rejected}
+
+
+def list_user_documents(user_id: UUID) -> list[dict]:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, original_name, mime_type, size_bytes, created_at
+                FROM uploaded_documents WHERE user_id = %s ORDER BY created_at DESC
+                """,
+                (user_id,),
+            )
+            rows = cursor.fetchall()
+    return [
+        {"id": str(row[0]), "filename": row[1], "mime_type": row[2], "size_bytes": row[3], "created_at": row[4]}
+        for row in rows
+    ]
+
+
+def get_user_document(user_id: UUID, document_id: UUID, upload_dir: str, encryption_key: str) -> dict | None:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT original_name, stored_name, mime_type, is_encrypted
+                FROM uploaded_documents WHERE id = %s AND user_id = %s
+                """,
+                (document_id, user_id),
+            )
+            row = cursor.fetchone()
+    if row is None:
+        return None
+
+    filename, stored_name, mime_type, is_encrypted = row
+    if Path(stored_name).name != stored_name:
+        raise ValueError("Invalid stored document name")
+    content = (Path(upload_dir) / str(user_id) / stored_name).read_bytes()
+    if is_encrypted:
+        content = decrypt_document(content, encryption_key)
+    return {"filename": filename, "mime_type": mime_type, "content": content}
+
+
+def delete_user_document(user_id: UUID, document_id: UUID, upload_dir: str) -> bool:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT stored_name FROM uploaded_documents WHERE id = %s AND user_id = %s",
+                (document_id, user_id),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return False
+            stored_name = row[0]
+            cursor.execute(
+                "DELETE FROM uploaded_documents WHERE id = %s AND user_id = %s",
+                (document_id, user_id),
+            )
+    if Path(stored_name).name == stored_name:
+        (Path(upload_dir) / str(user_id) / stored_name).unlink(missing_ok=True)
+    return True

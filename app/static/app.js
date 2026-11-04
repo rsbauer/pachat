@@ -11,11 +11,127 @@ const uploadStatus = document.getElementById('upload-status');
 const uploadResults = document.getElementById('upload-results');
 const uploadButton = document.getElementById('upload-button');
 const dropArea = document.getElementById('drop-area');
+const authScreen = document.getElementById('auth-screen');
+const appShell = document.getElementById('app-shell');
+const authForm = document.getElementById('auth-form');
+const authUsername = document.getElementById('auth-username');
+const authPassword = document.getElementById('auth-password');
+const authPasswordConfirm = document.getElementById('auth-password-confirm');
+const confirmPasswordLabel = document.getElementById('confirm-password-label');
+const authError = document.getElementById('auth-error');
+const authSubmit = document.getElementById('auth-submit');
+const authTitle = document.getElementById('auth-title');
+const authDescription = document.getElementById('auth-description');
+const showLoginButton = document.getElementById('show-login');
+const showRegisterButton = document.getElementById('show-register');
+const passwordRequirement = document.getElementById('password-requirement');
+const accountDisplayName = document.getElementById('account-display-name');
+const profileDialog = document.getElementById('profile-dialog');
+const filesDialog = document.getElementById('files-dialog');
+const managedFiles = document.getElementById('managed-files');
 
 const state = {
   messages: [],
   sessionId: null,
+  user: null,
+  authMode: 'login',
 };
+
+async function apiFetch(url, options) {
+  const response = await fetch(url, options);
+  if (response.status === 401) {
+    showAuthentication('login', 'Your session has ended. Sign in again to continue.');
+    throw new Error('Please sign in again.');
+  }
+  return response;
+}
+
+function showAuthentication(mode, message = '') {
+  state.user = null;
+  document.querySelectorAll('dialog[open]').forEach((dialog) => dialog.close());
+  appShell.hidden = true;
+  authScreen.hidden = false;
+  setAuthMode(mode);
+  authError.textContent = message;
+  authError.hidden = !message;
+}
+
+function setAuthMode(mode) {
+  state.authMode = mode;
+  const registering = mode === 'register';
+  authTitle.textContent = registering ? 'Create your account' : 'Welcome back';
+  authDescription.textContent = registering
+    ? 'Choose a username and a strong password.'
+    : 'Sign in with your username and password.';
+  authSubmit.textContent = registering ? 'Create account' : 'Sign in';
+  authPassword.autocomplete = registering ? 'new-password' : 'current-password';
+  authPassword.minLength = registering ? 12 : 1;
+  authPasswordConfirm.hidden = !registering;
+  authPasswordConfirm.required = registering;
+  confirmPasswordLabel.hidden = !registering;
+  passwordRequirement.hidden = !registering;
+  showLoginButton.classList.toggle('is-active', !registering);
+  showLoginButton.setAttribute('aria-pressed', String(!registering));
+  showRegisterButton.classList.toggle('is-active', registering);
+  showRegisterButton.setAttribute('aria-pressed', String(registering));
+  authError.hidden = true;
+}
+
+async function responseJson(response) {
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.detail || 'The request could not be completed.');
+  return result;
+}
+
+async function enterApplication(user) {
+  state.user = user;
+  resetConversation(false);
+  authScreen.hidden = true;
+  appShell.hidden = false;
+  accountDisplayName.textContent = user.display_name;
+  await restoreSession();
+}
+
+async function handleAuthentication(event) {
+  event.preventDefault();
+  authError.hidden = true;
+  const isRegistering = state.authMode === 'register';
+  if (isRegistering && authPassword.value !== authPasswordConfirm.value) {
+    authError.textContent = 'Passwords do not match.';
+    authError.hidden = false;
+    return;
+  }
+  authSubmit.disabled = true;
+
+  try {
+    const response = await fetch(`/api/auth/${isRegistering ? 'register' : 'login'}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: authUsername.value.trim(), password: authPassword.value }),
+    });
+    const user = await responseJson(response);
+    authForm.reset();
+    await enterApplication(user);
+  } catch (error) {
+    authError.textContent = error.message;
+    authError.hidden = false;
+  } finally {
+    authSubmit.disabled = false;
+  }
+}
+
+async function restoreAuthentication() {
+  try {
+    const response = await fetch('/api/auth/me');
+    if (response.status === 401) {
+      showAuthentication('login');
+      return;
+    }
+    await enterApplication(await responseJson(response));
+  } catch (error) {
+    showAuthentication('login', 'Unable to connect. Please try again.');
+  }
+}
 
 function addMessage(role, text) {
   emptyState.hidden = true;
@@ -35,6 +151,14 @@ function setStatus(text) {
   statusIndicator.textContent = text;
 }
 
+function resetConversation(removeStoredSession) {
+  state.messages = [];
+  state.sessionId = null;
+  if (removeStoredSession) localStorage.removeItem('pachat.sessionId');
+  emptyState.hidden = false;
+  messagesEl.replaceChildren(emptyState);
+}
+
 function createRequestBody(prompt) {
   return {
     message: prompt,
@@ -49,7 +173,7 @@ async function restoreSession() {
   if (!sessionId) return;
 
   try {
-    const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`);
+    const response = await apiFetch(`/api/sessions/${encodeURIComponent(sessionId)}`);
     if (response.status === 404) {
       localStorage.removeItem('pachat.sessionId');
       return;
@@ -67,11 +191,7 @@ async function restoreSession() {
 }
 
 function startNewChat() {
-  state.messages = [];
-  state.sessionId = null;
-  localStorage.removeItem('pachat.sessionId');
-  emptyState.hidden = false;
-  messagesEl.replaceChildren(emptyState);
+  resetConversation(true);
   setStatus('Ready');
   promptInput.focus();
 }
@@ -99,7 +219,7 @@ async function sendPrompt(event) {
   messagesEl.appendChild(assistantBubble);
 
   try {
-    const response = await fetch('/api/chat', {
+    const response = await apiFetch('/api/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -179,7 +299,7 @@ async function uploadDocuments(files) {
   uploadResults.textContent = '';
 
   try {
-    const response = await fetch('/api/uploads', { method: 'POST', body: formData });
+    const response = await apiFetch('/api/uploads', { method: 'POST', body: formData });
     const result = await response.json();
     if (!response.ok) throw new Error(result.detail || 'Upload failed');
 
@@ -202,6 +322,118 @@ async function uploadDocuments(files) {
   }
 }
 
+async function loadManagedFiles() {
+  const filesStatus = document.getElementById('files-status');
+  filesStatus.textContent = 'Loading files…';
+  managedFiles.replaceChildren();
+  try {
+    const response = await apiFetch('/api/files');
+    const files = await responseJson(response);
+    filesStatus.textContent = files.length ? '' : 'No files have been added yet.';
+    for (const file of files) {
+      const item = document.createElement('li');
+      const details = document.createElement('div');
+      details.className = 'file-details';
+      const filename = document.createElement('strong');
+      filename.textContent = file.filename;
+      const metadata = document.createElement('span');
+      metadata.textContent = `${formatFileSize(file.size_bytes)} · ${new Date(file.created_at).toLocaleDateString()}`;
+      details.append(filename, metadata);
+
+      const actions = document.createElement('div');
+      actions.className = 'file-actions';
+      const viewLink = document.createElement('a');
+      viewLink.href = `/api/files/${encodeURIComponent(file.id)}`;
+      viewLink.target = '_blank';
+      viewLink.rel = 'noopener';
+      viewLink.textContent = 'View';
+      const deleteButton = document.createElement('button');
+      deleteButton.type = 'button';
+      deleteButton.textContent = 'Delete';
+      deleteButton.addEventListener('click', () => deleteManagedFile(file));
+      actions.append(viewLink, deleteButton);
+      item.append(details, actions);
+      managedFiles.appendChild(item);
+    }
+  } catch (error) {
+    filesStatus.textContent = error.message;
+  }
+}
+
+function formatFileSize(size) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function deleteManagedFile(file) {
+  if (!window.confirm(`Delete ${file.filename}? This cannot be undone.`)) return;
+  try {
+    const response = await apiFetch(`/api/files/${encodeURIComponent(file.id)}`, { method: 'DELETE' });
+    await responseJson(response);
+    await loadManagedFiles();
+  } catch (error) {
+    document.getElementById('files-status').textContent = error.message;
+  }
+}
+
+async function saveProfile(event) {
+  event.preventDefault();
+  const status = document.getElementById('profile-status');
+  const displayName = document.getElementById('profile-display-name').value.trim();
+  if (!displayName) {
+    status.textContent = 'Enter a display name.';
+    return;
+  }
+  try {
+    const response = await apiFetch('/api/auth/profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ display_name: displayName }),
+    });
+    state.user = await responseJson(response);
+    accountDisplayName.textContent = state.user.display_name;
+    status.textContent = 'Profile updated.';
+  } catch (error) {
+    status.textContent = error.message;
+  }
+}
+
+async function savePassword(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const status = document.getElementById('password-status');
+  const currentPassword = document.getElementById('current-password').value;
+  const newPassword = document.getElementById('new-password').value;
+  const confirmedPassword = document.getElementById('confirm-new-password').value;
+  if (newPassword !== confirmedPassword) {
+    status.textContent = 'New passwords do not match.';
+    return;
+  }
+  try {
+    const response = await apiFetch('/api/auth/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    });
+    await responseJson(response);
+    form.reset();
+    status.textContent = 'Password updated.';
+  } catch (error) {
+    status.textContent = error.message;
+  }
+}
+
+async function signOut() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' });
+  } finally {
+    resetConversation(true);
+    authForm.reset();
+    showAuthentication('login', 'You have signed out.');
+  }
+}
+
 function handleDragOver(event) {
   event.preventDefault();
   dropArea.classList.add('is-dragging');
@@ -215,6 +447,9 @@ function handleDragLeave(event) {
 }
 
 chatForm.addEventListener('submit', sendPrompt);
+authForm.addEventListener('submit', handleAuthentication);
+showLoginButton.addEventListener('click', () => setAuthMode('login'));
+showRegisterButton.addEventListener('click', () => setAuthMode('register'));
 uploadForm.addEventListener('submit', (event) => {
   event.preventDefault();
   uploadDocuments(documentFiles.files);
@@ -232,4 +467,21 @@ dropArea.addEventListener('drop', (event) => {
   uploadDocuments(event.dataTransfer.files);
 });
 newChatButton.addEventListener('click', startNewChat);
-restoreSession();
+document.getElementById('profile-open').addEventListener('click', () => {
+  document.getElementById('profile-username').value = state.user.username;
+  document.getElementById('profile-display-name').value = state.user.display_name;
+  document.getElementById('profile-status').textContent = '';
+  document.getElementById('password-status').textContent = '';
+  profileDialog.showModal();
+});
+document.getElementById('files-open').addEventListener('click', () => {
+  filesDialog.showModal();
+  loadManagedFiles();
+});
+document.getElementById('logout').addEventListener('click', signOut);
+document.getElementById('profile-form').addEventListener('submit', saveProfile);
+document.getElementById('password-form').addEventListener('submit', savePassword);
+document.querySelectorAll('[data-close-dialog]').forEach((button) => {
+  button.addEventListener('click', () => document.getElementById(button.dataset.closeDialog).close());
+});
+restoreAuthentication();

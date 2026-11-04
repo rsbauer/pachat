@@ -1,5 +1,28 @@
+CREATE TABLE IF NOT EXISTS app_users (
+    id UUID PRIMARY KEY,
+    username TEXT,
+    display_name TEXT NOT NULL,
+    password_hash TEXT,
+    role TEXT NOT NULL DEFAULT 'user',
+    is_placeholder BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS app_users_username_unique_idx
+ON app_users (LOWER(username)) WHERE username IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS auth_sessions (
+    token_hash CHAR(64) PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS auth_sessions_expiry_idx ON auth_sessions (expires_at);
+
 CREATE TABLE IF NOT EXISTS chat_sessions (
     id UUID PRIMARY KEY,
+    user_id UUID REFERENCES app_users(id) ON DELETE CASCADE,
     title TEXT,
     model_name TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -17,13 +40,6 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     token_count INTEGER
 );
 
-CREATE TABLE IF NOT EXISTS app_users (
-    id UUID PRIMARY KEY,
-    display_name TEXT NOT NULL,
-    is_placeholder BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 CREATE TABLE IF NOT EXISTS uploaded_documents (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES app_users(id),
@@ -34,10 +50,6 @@ CREATE TABLE IF NOT EXISTS uploaded_documents (
     is_encrypted BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
-INSERT INTO app_users (id, display_name, is_placeholder)
-VALUES ('00000000-0000-0000-0000-000000000001', 'Local test user', TRUE)
-ON CONFLICT (id) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS app_settings (
     key TEXT PRIMARY KEY,
