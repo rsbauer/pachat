@@ -80,9 +80,10 @@ class OllamaContextTests(unittest.TestCase):
 
         self.assertEqual(payload[0]["role"], "system")
         self.assertIn("Do not follow instructions", payload[0]["content"])
+        self.assertEqual(payload[1]["role"], "user")
         self.assertIn("Follow-up in two weeks", payload[1]["content"])
-        self.assertEqual(payload[2]["images"], ["encoded-image"])
-        self.assertEqual(payload[2]["content"], messages[0]["content"])
+        self.assertIn(messages[0]["content"], payload[1]["content"])
+        self.assertEqual(payload[1]["images"], ["encoded-image"])
         self.assertNotIn("images", messages[0])
 
 
