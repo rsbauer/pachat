@@ -1,4 +1,5 @@
 const messagesEl = document.getElementById('messages');
+const emptyState = document.getElementById('empty-state');
 const chatForm = document.getElementById('chat-form');
 const promptInput = document.getElementById('prompt');
 const statusIndicator = document.getElementById('status-indicator');
@@ -9,6 +10,7 @@ const documentFiles = document.getElementById('document-files');
 const uploadStatus = document.getElementById('upload-status');
 const uploadResults = document.getElementById('upload-results');
 const uploadButton = document.getElementById('upload-button');
+const dropArea = document.getElementById('drop-area');
 
 const state = {
   messages: [],
@@ -16,6 +18,7 @@ const state = {
 };
 
 function addMessage(role, text) {
+  emptyState.hidden = true;
   const row = document.createElement('div');
   row.className = `message ${role}`;
 
@@ -67,7 +70,8 @@ function startNewChat() {
   state.messages = [];
   state.sessionId = null;
   localStorage.removeItem('pachat.sessionId');
-  messagesEl.textContent = '';
+  emptyState.hidden = false;
+  messagesEl.replaceChildren(emptyState);
   setStatus('Ready');
   promptInput.focus();
 }
@@ -162,17 +166,16 @@ async function sendPrompt(event) {
   }
 }
 
-async function uploadDocuments(event) {
-  event.preventDefault();
-  if (!documentFiles.files.length) {
-    uploadStatus.textContent = 'Select one or more files first.';
+async function uploadDocuments(files) {
+  if (!files.length) {
+    uploadStatus.textContent = 'Select or drop one or more files first.';
     return;
   }
 
   const formData = new FormData();
-  for (const file of documentFiles.files) formData.append('files', file);
+  for (const file of files) formData.append('files', file);
   uploadButton.disabled = true;
-  uploadStatus.textContent = 'Scanning and saving files…';
+  uploadStatus.textContent = `Scanning and saving ${files.length} file(s)…`;
   uploadResults.textContent = '';
 
   try {
@@ -199,7 +202,34 @@ async function uploadDocuments(event) {
   }
 }
 
+function handleDragOver(event) {
+  event.preventDefault();
+  dropArea.classList.add('is-dragging');
+}
+
+function handleDragLeave(event) {
+  event.preventDefault();
+  if (!dropArea.contains(event.relatedTarget)) {
+    dropArea.classList.remove('is-dragging');
+  }
+}
+
 chatForm.addEventListener('submit', sendPrompt);
-uploadForm.addEventListener('submit', uploadDocuments);
+uploadForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  uploadDocuments(documentFiles.files);
+});
+dropArea.addEventListener('dragenter', handleDragOver);
+dropArea.addEventListener('dragover', handleDragOver);
+dropArea.addEventListener('dragleave', handleDragLeave);
+dropArea.addEventListener('drop', (event) => {
+  event.preventDefault();
+  dropArea.classList.remove('is-dragging');
+  if (!event.dataTransfer.files.length) {
+    uploadStatus.textContent = 'No files detected. Try again or use the file picker.';
+    return;
+  }
+  uploadDocuments(event.dataTransfer.files);
+});
 newChatButton.addEventListener('click', startNewChat);
 restoreSession();

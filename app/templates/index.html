@@ -3,37 +3,60 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Pachat</title>
+    <meta name="theme-color" content="#f2f7f4" />
+    <title>Pachat | Patient Advocate</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
     <main class="app-shell">
-      <aside class="sidebar">
-        <h1>Pachat</h1>
-        <button id="new-chat" class="secondary-button">New chat</button>
-        <div class="status-box">
-          <strong>Status</strong>
-          <span id="status-indicator">Ready</span>
+      <aside class="sidebar" aria-label="Pachat navigation">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">P</span>
+          <div>
+            <h1>Pachat</h1>
+            <p>Patient advocate</p>
+          </div>
         </div>
+        <button id="new-chat" class="secondary-button" type="button">+ New conversation</button>
+        <div class="sidebar-spacer"></div>
+        <div class="status-box">
+          <span class="status-label">Assistant status</span>
+          <strong id="status-indicator" role="status" aria-live="polite">Ready</strong>
+        </div>
+        <p class="sidebar-note">Share only the details needed for your question.</p>
       </aside>
 
-      <section class="chat-panel">
+      <section class="chat-panel" aria-label="Patient advocate chat">
+        <header class="chat-header">
+          <p class="eyebrow">Care support</p>
+          <h2>What would you like help with?</h2>
+          <p class="care-note">AI responses can be incomplete and are not a substitute for advice from your care team.</p>
+        </header>
         <form id="upload-form" class="intake-form">
           <label for="document-files">Add case documents</label>
-          <div class="intake-controls">
-            <input id="document-files" name="files" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png,.tif,.txt,.rtf,.md,.markdown,.csv,.tsv,.log,.json,.xml,.yaml,.yml,.zip,text/*,image/*" />
-            <button type="submit" id="upload-button">Upload</button>
+          <div id="drop-area" class="drop-area">
+            <p class="drop-hint" aria-hidden="true">Drop files here, or choose them below</p>
+            <div class="intake-controls">
+              <input id="document-files" name="files" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png,.tif,.txt,.rtf,.md,.markdown,.csv,.tsv,.log,.json,.xml,.yaml,.yml,.zip,text/*,image/*" />
+              <button type="submit" id="upload-button">Add files</button>
+            </div>
           </div>
           <p id="upload-status" aria-live="polite">PDF, Office, image, and text files are accepted. ZIP archives are unpacked before scanning.</p>
           <ul id="upload-results" aria-live="polite"></ul>
         </form>
-        <div id="messages" class="messages" aria-live="polite"></div>
+        <div id="messages" class="messages" aria-live="polite">
+          <div id="empty-state" class="empty-state">
+            <p class="empty-kicker">A good place to begin</p>
+            <h3>Tell us what's on your mind.</h3>
+            <p>Ask about a care decision, a health document, or a next step you are unsure about.</p>
+          </div>
+        </div>
 
         <form id="chat-form" class="composer">
           <textarea
             id="prompt"
             rows="3"
-            placeholder="Ask the model anything…"
+            placeholder="Write your question here..."
             aria-label="User message"
           ></textarea>
           <button type="submit" id="send-button">Send</button>
