@@ -44,6 +44,18 @@ def init_db() -> None:
             cur.execute("CREATE INDEX IF NOT EXISTS auth_sessions_expiry_idx ON auth_sessions (expires_at);")
             cur.execute(
                 """
+                CREATE TABLE IF NOT EXISTS auth_login_attempts (
+                    bucket_hash CHAR(64) PRIMARY KEY,
+                    failed_attempts INTEGER NOT NULL,
+                    window_started_at TIMESTAMPTZ NOT NULL
+                );
+                """
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS auth_login_attempts_window_idx ON auth_login_attempts (window_started_at);"
+            )
+            cur.execute(
+                """
                 CREATE TABLE IF NOT EXISTS chat_sessions (
                     id UUID PRIMARY KEY,
                     user_id UUID REFERENCES app_users(id) ON DELETE CASCADE,

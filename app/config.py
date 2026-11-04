@@ -12,6 +12,7 @@ class Settings:
     APP_ENV = get_setting("APP_ENV", "development")
     APP_PORT = int(get_setting("APP_PORT", "9105"))
     DATABASE_URL = get_setting("DATABASE_URL", "postgresql://pachat:secret@db:5432/pachat")
+    AUTH_RATE_LIMIT_SECRET = get_setting("AUTH_RATE_LIMIT_SECRET", DATABASE_URL)
     OLLAMA_BASE_URL = get_setting("OLLAMA_BASE_URL", "http://localhost:11434")
     OLLAMA_MODEL = get_setting(
         "OLLAMA_MODEL",

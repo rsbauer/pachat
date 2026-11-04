@@ -128,11 +128,13 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(upload_response.status_code, 401)
 
     @patch("routes.create_session", return_value="opaque-session-token")
+    @patch("routes.clear_login_attempts")
+    @patch("routes.login_rate_limit_remaining", return_value=None)
     @patch(
         "routes.authenticate_user",
         return_value={"id": uuid4(), "username": "patient.test", "display_name": "Patient", "role": "user"},
     )
-    def test_login_sets_http_only_same_site_cookie(self, _authenticate, _create_session):
+    def test_login_sets_http_only_same_site_cookie(self, _authenticate, _limit, _clear, _create_session):
         response = self.client.post(
             "/api/auth/login",
             json={"username": "patient.test", "password": "test-password"},
@@ -142,6 +144,31 @@ class RouteTests(unittest.TestCase):
         self.assertIn("httponly", response.headers["set-cookie"].lower())
         self.assertIn("samesite=lax", response.headers["set-cookie"].lower())
         self.assertNotIn("opaque-session-token", response.text)
+        _clear.assert_called_once_with("patient.test", "testclient")
+
+    @patch("routes.record_failed_login")
+    @patch("routes.authenticate_user", return_value=None)
+    @patch("routes.login_rate_limit_remaining", return_value=None)
+    def test_failed_login_records_attempt(self, _limit, _authenticate, record_failure):
+        response = self.client.post(
+            "/api/auth/login",
+            json={"username": "patient.test", "password": "wrong-password"},
+        )
+
+        self.assertEqual(response.status_code, 401)
+        record_failure.assert_called_once_with("patient.test", "testclient")
+
+    @patch("routes.authenticate_user")
+    @patch("routes.login_rate_limit_remaining", return_value=47)
+    def test_login_rate_limit_blocks_before_password_check(self, _limit, authenticate):
+        response = self.client.post(
+            "/api/auth/login",
+            json={"username": "patient.test", "password": "wrong-password"},
+        )
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.headers["retry-after"], "47")
+        authenticate.assert_not_called()
 
 
 if __name__ == "__main__":

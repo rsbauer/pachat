@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
@@ -16,6 +17,8 @@ from database import get_db_connection
 
 SESSION_COOKIE = "pachat_session"
 SESSION_LIFETIME = timedelta(hours=12)
+LOGIN_FAILURE_LIMIT = 5
+LOGIN_WINDOW = timedelta(minutes=15)
 PASSWORD_HASHER = PasswordHasher()
 DUMMY_PASSWORD_HASH = PASSWORD_HASHER.hash(secrets.token_urlsafe(24))
 
@@ -73,6 +76,66 @@ def authenticate_user(username: str, password: str) -> dict | None:
     if not _password_matches(password, stored_hash) or user is None:
         return None
     return {"id": user[0], "username": user[1], "display_name": user[2], "role": user[3]}
+
+
+def _login_bucket_hash(username: str, client_host: str) -> str:
+    message = f"{username.casefold()}\0{client_host}".encode("utf-8")
+    key = settings.AUTH_RATE_LIMIT_SECRET.encode("utf-8")
+    return hmac.new(key, message, hashlib.sha256).hexdigest()
+
+
+def login_rate_limit_remaining(username: str, client_host: str) -> int | None:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT GREATEST(
+                    1,
+                    CEIL(EXTRACT(EPOCH FROM window_started_at + INTERVAL '15 minutes' - NOW()))
+                )::INTEGER
+                FROM auth_login_attempts
+                WHERE bucket_hash = %s
+                    AND failed_attempts >= %s
+                    AND window_started_at > NOW() - INTERVAL '15 minutes'
+                """,
+                (_login_bucket_hash(username, client_host), LOGIN_FAILURE_LIMIT),
+            )
+            row = cursor.fetchone()
+    return row[0] if row else None
+
+
+def record_failed_login(username: str, client_host: str) -> None:
+    bucket_hash = _login_bucket_hash(username, client_host)
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO auth_login_attempts (bucket_hash, failed_attempts, window_started_at)
+                VALUES (%s, 1, NOW())
+                ON CONFLICT (bucket_hash) DO UPDATE SET
+                    failed_attempts = CASE
+                        WHEN auth_login_attempts.window_started_at <= NOW() - INTERVAL '15 minutes' THEN 1
+                        ELSE auth_login_attempts.failed_attempts + 1
+                    END,
+                    window_started_at = CASE
+                        WHEN auth_login_attempts.window_started_at <= NOW() - INTERVAL '15 minutes' THEN NOW()
+                        ELSE auth_login_attempts.window_started_at
+                    END
+                """,
+                (bucket_hash,),
+            )
+            cursor.execute(
+                "DELETE FROM auth_login_attempts WHERE window_started_at <= NOW() - INTERVAL '1 day'"
+            )
+
+
+def clear_login_attempts(username: str, client_host: str) -> None:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM auth_login_attempts WHERE bucket_hash = %s",
+                (_login_bucket_hash(username, client_host),),
+            )
 
 
 def _token_digest(token: str) -> str:

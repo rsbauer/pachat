@@ -13,9 +13,12 @@ from auth import (
     UsernameTakenError,
     authenticate_user,
     change_password,
+    clear_login_attempts,
     create_account,
     create_session,
     get_current_user,
+    login_rate_limit_remaining,
+    record_failed_login,
     revoke_session,
     set_session_cookie,
     update_display_name,
@@ -55,10 +58,20 @@ async def api_register(payload: RegisterRequest, response: Response):
 
 
 @router.post("/api/auth/login")
-async def api_login(payload: LoginRequest, response: Response):
+async def api_login(payload: LoginRequest, request: Request, response: Response):
+    client_host = request.client.host if request.client else "unknown"
+    remaining = await run_in_threadpool(login_rate_limit_remaining, payload.username, client_host)
+    if remaining is not None:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many failed sign-in attempts. Try again later.",
+            headers={"Retry-After": str(remaining)},
+        )
     user = await run_in_threadpool(authenticate_user, payload.username.lower(), payload.password)
     if user is None:
+        await run_in_threadpool(record_failed_login, payload.username, client_host)
         raise HTTPException(status_code=401, detail="Username or password is incorrect")
+    await run_in_threadpool(clear_login_attempts, payload.username, client_host)
     token = await run_in_threadpool(create_session, user["id"])
     set_session_cookie(response, token)
     return _public_user(user)
