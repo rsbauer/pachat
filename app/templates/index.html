@@ -39,6 +39,21 @@
             <p id="auth-error" class="form-error" role="alert" hidden></p>
             <button id="auth-submit" class="primary-button" type="submit">Sign in</button>
           </form>
+          <button id="forgot-password" class="auth-link" type="button">Forgot password?</button>
+          <form id="recovery-form" class="auth-form" hidden>
+            <label for="recovery-username">Username</label>
+            <input id="recovery-username" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9](?:[A-Za-z0-9._]|-)*" autocomplete="username" required />
+            <label for="recovery-code">Recovery code</label>
+            <input id="recovery-code" type="text" minlength="32" maxlength="128" autocomplete="off" required />
+            <label for="recovery-password">New password</label>
+            <input id="recovery-password" type="password" minlength="10" maxlength="128" autocomplete="new-password" required />
+            <label for="recovery-password-confirm">Confirm new password</label>
+            <input id="recovery-password-confirm" type="password" minlength="10" maxlength="128" autocomplete="new-password" required />
+            <p class="field-hint">Use at least 10 characters.</p>
+            <p id="recovery-error" class="form-error" role="alert" hidden></p>
+            <button id="recovery-submit" class="primary-button" type="submit">Reset password</button>
+            <button id="return-to-login" class="auth-link" type="button">Back to sign in</button>
+          </form>
           <p class="auth-footnote">Use a password you do not use on another site.</p>
         </div>
       </div>
@@ -136,6 +151,15 @@
         <p id="password-status" class="dialog-status" role="status"></p>
         <button class="primary-button" type="submit">Update password</button>
       </form>
+      <hr />
+      <form id="recovery-code-form" class="dialog-form">
+        <h3>Recovery code</h3>
+        <p class="field-hint">Create a new one if you have lost yours. This replaces any previous code.</p>
+        <label for="recovery-code-current-password">Current password</label>
+        <input id="recovery-code-current-password" type="password" autocomplete="current-password" maxlength="128" required />
+        <p id="recovery-code-status" class="dialog-status" role="status"></p>
+        <button class="primary-button" type="submit">Generate new recovery code</button>
+      </form>
     </dialog>
 
     <dialog id="files-dialog" class="account-dialog" aria-labelledby="files-title">
@@ -149,6 +173,18 @@
       <p class="files-note">Files are only available to your signed-in account.</p>
       <p id="files-status" class="dialog-status" role="status"></p>
       <ul id="managed-files" class="managed-files"></ul>
+    </dialog>
+
+    <dialog id="recovery-code-dialog" class="account-dialog recovery-code-dialog" aria-labelledby="recovery-code-title">
+      <p class="eyebrow">Save this code</p>
+      <h2 id="recovery-code-title">Keep your recovery code somewhere private</h2>
+      <p class="files-note">This code is shown only once. Anyone with it can reset your password. Store it separately from your password.</p>
+      <code id="recovery-code-value" class="recovery-code-value"></code>
+      <p id="recovery-copy-status" class="dialog-status" role="status"></p>
+      <div class="recovery-code-actions">
+        <button id="recovery-code-copy" class="secondary-button" type="button">Copy code</button>
+        <button id="recovery-code-done" class="primary-button" type="button">I've saved it</button>
+      </div>
     </dialog>
 
     <script src="/static/app.js"></script>

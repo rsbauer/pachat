@@ -237,6 +237,25 @@ input:focus-visible {
   margin-top: 20px;
 }
 
+.auth-link {
+  min-height: 36px;
+  margin-top: 8px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.86rem;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.auth-link:hover {
+  color: var(--accent-hover);
+}
+
 .form-error {
   margin: 3px 0;
   color: #9e382f;
@@ -350,6 +369,55 @@ input:focus-visible {
   margin: 24px 0;
   border: 0;
   background: var(--line);
+}
+
+.recovery-code-dialog h2 {
+  margin: 0 0 12px;
+  font-family: Georgia, serif;
+  font-size: 1.65rem;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.recovery-code-value {
+  display: block;
+  margin: 18px 0 10px;
+  padding: 16px;
+  border: 1px dashed #b6c9c1;
+  border-radius: 5px;
+  background: var(--sidebar);
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+  text-align: center;
+  user-select: all;
+}
+
+.recovery-code-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.recovery-code-actions .secondary-button,
+.recovery-code-actions .primary-button {
+  width: auto;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 14px;
+  text-align: center;
+}
+
+.recovery-code-actions .secondary-button {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--accent);
+}
+
+.recovery-code-actions .secondary-button:hover {
+  background: var(--accent-soft);
 }
 
 .files-note {

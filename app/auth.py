@@ -31,6 +31,10 @@ def password_hash(password: str) -> str:
     return PASSWORD_HASHER.hash(password)
 
 
+def _recovery_code_hash(code: str) -> str:
+    return hashlib.sha256(code.encode("utf-8")).hexdigest()
+
+
 def _password_matches(password: str, stored_hash: str) -> bool:
     try:
         return PASSWORD_HASHER.verify(stored_hash, password)
@@ -40,23 +44,71 @@ def _password_matches(password: str, stored_hash: str) -> bool:
 
 def create_account(username: str, password: str) -> dict:
     user_id = uuid4()
+    recovery_code = secrets.token_hex(16)
     stored_hash = password_hash(password)
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
-                    INSERT INTO app_users (id, username, display_name, password_hash)
-                    VALUES (%s, %s, %s, %s)
+                    INSERT INTO app_users (id, username, display_name, password_hash, recovery_code_hash)
+                    VALUES (%s, %s, %s, %s, %s)
                     RETURNING id, username, display_name, role
                     """,
-                    (user_id, username, username, stored_hash),
+                    (user_id, username, username, stored_hash, _recovery_code_hash(recovery_code)),
                 )
                 user = cursor.fetchone()
     except psycopg.errors.UniqueViolation as exc:
         raise UsernameTakenError from exc
 
-    return {"id": user[0], "username": user[1], "display_name": user[2], "role": user[3]}
+    return {
+        "id": user[0],
+        "username": user[1],
+        "display_name": user[2],
+        "role": user[3],
+        "recovery_code": recovery_code,
+    }
+
+
+def recover_account(username: str, recovery_code: str, new_password: str) -> bool:
+    code_hash = _recovery_code_hash(recovery_code)
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, recovery_code_hash FROM app_users
+                WHERE LOWER(username) = LOWER(%s) AND password_hash IS NOT NULL
+                FOR UPDATE
+                """,
+                (username,),
+            )
+            user = cursor.fetchone()
+            if user is None or not user[1] or not hmac.compare_digest(user[1], code_hash):
+                return False
+            cursor.execute(
+                """
+                UPDATE app_users SET password_hash = %s, recovery_code_hash = NULL
+                WHERE id = %s
+                """,
+                (password_hash(new_password), user[0]),
+            )
+            cursor.execute("DELETE FROM auth_sessions WHERE user_id = %s", (user[0],))
+    return True
+
+
+def rotate_recovery_code(user_id: UUID, current_password: str) -> str:
+    recovery_code = secrets.token_hex(16)
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT password_hash FROM app_users WHERE id = %s FOR UPDATE", (user_id,))
+            user = cursor.fetchone()
+            if user is None or not _password_matches(current_password, user[0]):
+                raise HTTPException(status_code=400, detail="Current password is incorrect")
+            cursor.execute(
+                "UPDATE app_users SET recovery_code_hash = %s WHERE id = %s",
+                (_recovery_code_hash(recovery_code), user_id),
+            )
+    return recovery_code
 
 
 def authenticate_user(username: str, password: str) -> dict | None:

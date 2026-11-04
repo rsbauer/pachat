@@ -16,6 +16,7 @@ def init_db() -> None:
                     username TEXT,
                     display_name TEXT NOT NULL,
                     password_hash TEXT,
+                    recovery_code_hash TEXT,
                     role TEXT NOT NULL DEFAULT 'user',
                     is_placeholder BOOLEAN NOT NULL DEFAULT FALSE,
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -24,6 +25,7 @@ def init_db() -> None:
             )
             cur.execute("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS username TEXT;")
             cur.execute("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS password_hash TEXT;")
+            cur.execute("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS recovery_code_hash TEXT;")
             cur.execute("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user';")
             cur.execute(
                 """

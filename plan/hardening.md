@@ -4,7 +4,7 @@ This document records work intentionally deferred during the proof of concept. A
 
 ## Current POC Risks
 
-- Registration is open. Login attempts are limited per username/client pair, but registration is not rate limited. Password recovery and account deletion are not implemented; public access still needs additional controls.
+- Registration is open. Login and recovery-code attempts are limited per username/client pair, but registration is not rate limited. Email recovery and account deletion are not implemented; public access still needs additional controls.
 - The app host is on the internal network and is not directly reachable from the public internet. Public requests reach the app through Caddy. Keep the route restricted until authentication and privacy controls have been reviewed in the deployed environment.
 - Compose publishes the app on host port `9105` and PostgreSQL on host port `5432`. These ports are not directly internet-reachable under the current network boundary, but may be reachable by other hosts on permitted internal networks. PostgreSQL should only be reachable by the app and authorized administrators.
 - The example environment file contains a placeholder database password. The deployed `.env` must use a unique strong secret and must remain outside version control.
@@ -18,7 +18,7 @@ Complete these before allowing unrestricted public access or collecting sensitiv
 - Preserve the current boundary: app host ports must remain unavailable from the public internet, and direct access to `9105` should be limited to Caddy and trusted internal networks. Verify these rules after network or firewall changes.
 - Remove the PostgreSQL host port mapping in production. Keep database access on the Compose network; if host administration is needed, bind it to loopback or use a private tunnel. Keep port `5432` blocked from untrusted internal clients as well.
 - Authentication is now required for chat, session, model, and file APIs. Accounts use Argon2id password hashes and expiring HttpOnly cookies; sessions and uploaded documents are scoped to the signed-in user. Validate these controls in the deployed environment before allowing broader access.
-- Add registration rate limits, password recovery, and a defined account-deletion flow before public use. Keep the Caddy route restricted to trusted users until these controls and privacy requirements are reviewed; TLS alone does not restrict who can create an account or attempt passwords.
+- Add registration rate limits, an administrator-assisted recovery path for lost recovery codes, and a defined account-deletion flow before public use. Keep the Caddy route restricted to trusted users until these controls and privacy requirements are reviewed; TLS alone does not restrict who can create an account or attempt passwords.
 - Replace example credentials with unique strong secrets. Keep `.env` out of source control, limit its file permissions, and rotate secrets if exposed. Use a secrets manager where available.
 - Define what data users may enter, how long chats are retained, who can access them, and how deletion works. Determine applicable privacy/legal requirements before storing real patient-identifiable data.
 - Document that the model is not a substitute for professional medical advice, and define an appropriate escalation message for emergencies and high-risk situations.
@@ -46,7 +46,7 @@ Complete these before allowing unrestricted public access or collecting sensitiv
 ## Suggested Completion Order
 
 1. Verify from both an external network and an untrusted internal client that direct app/database ports are blocked and only intended routes are reachable.
-2. Verify account ownership checks and cookie behavior, then add login rate limits and recovery before unrestricted public use.
+2. Verify account ownership checks, cookie behavior, and recovery-code handling before unrestricted public use.
 3. Define health-data privacy, retention, and deletion behavior before accepting sensitive data.
 4. Add rate/concurrency limits, input bounds, and production-safe container settings.
 5. Establish encrypted backups, restore tests, updates, and operational monitoring.

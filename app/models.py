@@ -40,3 +40,13 @@ class ProfileUpdate(BaseModel):
 class PasswordUpdate(BaseModel):
     current_password: str = Field(..., min_length=1, max_length=128)
     new_password: str = Field(..., min_length=10, max_length=128)
+
+
+class RecoveryRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=32, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+    recovery_code: str = Field(..., min_length=32, max_length=128)
+    new_password: str = Field(..., min_length=10, max_length=128)
+
+
+class RecoveryCodeRequest(BaseModel):
+    current_password: str = Field(..., min_length=1, max_length=128)

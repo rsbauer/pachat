@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS app_users (
     username TEXT,
     display_name TEXT NOT NULL,
     password_hash TEXT,
+    recovery_code_hash TEXT,
     role TEXT NOT NULL DEFAULT 'user',
     is_placeholder BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

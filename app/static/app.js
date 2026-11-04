@@ -24,10 +24,18 @@ const authTitle = document.getElementById('auth-title');
 const authDescription = document.getElementById('auth-description');
 const showLoginButton = document.getElementById('show-login');
 const showRegisterButton = document.getElementById('show-register');
+const authTabs = document.querySelector('.auth-tabs');
+const forgotPasswordButton = document.getElementById('forgot-password');
+const recoveryForm = document.getElementById('recovery-form');
+const recoveryUsername = document.getElementById('recovery-username');
+const recoveryError = document.getElementById('recovery-error');
+const recoverySubmit = document.getElementById('recovery-submit');
 const passwordRequirement = document.getElementById('password-requirement');
 const accountDisplayName = document.getElementById('account-display-name');
 const profileDialog = document.getElementById('profile-dialog');
 const filesDialog = document.getElementById('files-dialog');
+const recoveryCodeDialog = document.getElementById('recovery-code-dialog');
+const recoveryCodeValue = document.getElementById('recovery-code-value');
 const managedFiles = document.getElementById('managed-files');
 
 const state = {
@@ -59,10 +67,15 @@ function showAuthentication(mode, message = '') {
 function setAuthMode(mode) {
   state.authMode = mode;
   const registering = mode === 'register';
+  const recovering = mode === 'recover';
   authTitle.textContent = registering ? 'Create your account' : 'Welcome back';
   authDescription.textContent = registering
     ? 'Choose a username and a strong password.'
     : 'Sign in with your username and password.';
+  if (recovering) {
+    authTitle.textContent = 'Recover your account';
+    authDescription.textContent = 'Enter your username and recovery code to set a new password.';
+  }
   authSubmit.textContent = registering ? 'Create account' : 'Sign in';
   authPassword.autocomplete = registering ? 'new-password' : 'current-password';
   authPassword.minLength = registering ? 10 : 1;
@@ -74,6 +87,12 @@ function setAuthMode(mode) {
   showLoginButton.setAttribute('aria-pressed', String(!registering));
   showRegisterButton.classList.toggle('is-active', registering);
   showRegisterButton.setAttribute('aria-pressed', String(registering));
+  authTabs.hidden = recovering;
+  authForm.hidden = recovering;
+  recoveryForm.hidden = !recovering;
+  forgotPasswordButton.hidden = registering || recovering;
+  document.querySelector('.auth-footnote').hidden = recovering;
+  recoveryError.hidden = true;
   authError.hidden = true;
 }
 
@@ -90,6 +109,12 @@ async function enterApplication(user) {
   appShell.hidden = false;
   accountDisplayName.textContent = user.display_name;
   await restoreSession();
+}
+
+function showRecoveryCode(code) {
+  recoveryCodeValue.textContent = code;
+  document.getElementById('recovery-copy-status').textContent = '';
+  recoveryCodeDialog.showModal();
 }
 
 async function handleAuthentication(event) {
@@ -110,13 +135,52 @@ async function handleAuthentication(event) {
       body: JSON.stringify({ username: authUsername.value.trim(), password: authPassword.value }),
     });
     const user = await responseJson(response);
+    const recoveryCode = isRegistering ? user.recovery_code : null;
+    delete user.recovery_code;
     authForm.reset();
     await enterApplication(user);
+    if (recoveryCode) showRecoveryCode(recoveryCode);
   } catch (error) {
     authError.textContent = error.message;
     authError.hidden = false;
   } finally {
     authSubmit.disabled = false;
+  }
+}
+
+async function handlePasswordRecovery(event) {
+  event.preventDefault();
+  recoveryError.hidden = true;
+  const newPassword = document.getElementById('recovery-password').value;
+  const confirmedPassword = document.getElementById('recovery-password-confirm').value;
+  if (newPassword !== confirmedPassword) {
+    recoveryError.textContent = 'New passwords do not match.';
+    recoveryError.hidden = false;
+    return;
+  }
+
+  recoverySubmit.disabled = true;
+  try {
+    const response = await fetch('/api/auth/recover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: recoveryUsername.value.trim(),
+        recovery_code: document.getElementById('recovery-code').value.trim(),
+        new_password: newPassword,
+      }),
+    });
+    await responseJson(response);
+    recoveryForm.reset();
+    authForm.reset();
+    setAuthMode('login');
+    authError.textContent = 'Password updated. Sign in with your new password.';
+    authError.hidden = false;
+  } catch (error) {
+    recoveryError.textContent = error.message;
+    recoveryError.hidden = false;
+  } finally {
+    recoverySubmit.disabled = false;
   }
 }
 
@@ -424,6 +488,35 @@ async function savePassword(event) {
   }
 }
 
+async function rotateRecoveryCode(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const status = document.getElementById('recovery-code-status');
+  const currentPassword = document.getElementById('recovery-code-current-password').value;
+  try {
+    const response = await apiFetch('/api/auth/recovery-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ current_password: currentPassword }),
+    });
+    const result = await responseJson(response);
+    form.reset();
+    status.textContent = '';
+    showRecoveryCode(result.recovery_code);
+  } catch (error) {
+    status.textContent = error.message;
+  }
+}
+
+async function copyRecoveryCode() {
+  try {
+    await navigator.clipboard.writeText(recoveryCodeValue.textContent);
+    document.getElementById('recovery-copy-status').textContent = 'Code copied.';
+  } catch (error) {
+    document.getElementById('recovery-copy-status').textContent = 'Copy unavailable. Select the code to copy it.';
+  }
+}
+
 async function signOut() {
   try {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -448,8 +541,17 @@ function handleDragLeave(event) {
 
 chatForm.addEventListener('submit', sendPrompt);
 authForm.addEventListener('submit', handleAuthentication);
+recoveryForm.addEventListener('submit', handlePasswordRecovery);
 showLoginButton.addEventListener('click', () => setAuthMode('login'));
 showRegisterButton.addEventListener('click', () => setAuthMode('register'));
+forgotPasswordButton.addEventListener('click', () => setAuthMode('recover'));
+document.getElementById('return-to-login').addEventListener('click', () => setAuthMode('login'));
+document.getElementById('recovery-code-form').addEventListener('submit', rotateRecoveryCode);
+document.getElementById('recovery-code-copy').addEventListener('click', copyRecoveryCode);
+recoveryCodeDialog.addEventListener('close', () => {
+  recoveryCodeValue.textContent = '';
+});
+document.getElementById('recovery-code-done').addEventListener('click', () => recoveryCodeDialog.close());
 uploadForm.addEventListener('submit', (event) => {
   event.preventDefault();
   uploadDocuments(documentFiles.files);
@@ -472,6 +574,7 @@ document.getElementById('profile-open').addEventListener('click', () => {
   document.getElementById('profile-display-name').value = state.user.display_name;
   document.getElementById('profile-status').textContent = '';
   document.getElementById('password-status').textContent = '';
+  document.getElementById('recovery-code-status').textContent = '';
   profileDialog.showModal();
 });
 document.getElementById('files-open').addEventListener('click', () => {

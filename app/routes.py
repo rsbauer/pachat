@@ -19,7 +19,9 @@ from auth import (
     get_current_user,
     login_rate_limit_remaining,
     record_failed_login,
+    recover_account,
     revoke_session,
+    rotate_recovery_code,
     set_session_cookie,
     update_display_name,
 )
@@ -33,7 +35,15 @@ from intake import (
     list_user_documents,
     store_documents,
 )
-from models import ChatRequest, LoginRequest, PasswordUpdate, ProfileUpdate, RegisterRequest
+from models import (
+    ChatRequest,
+    LoginRequest,
+    PasswordUpdate,
+    ProfileUpdate,
+    RecoveryCodeRequest,
+    RecoveryRequest,
+    RegisterRequest,
+)
 from ollama_client import stream_chat
 from storage import SessionNotFoundError, get_session, prepare_chat, save_assistant_message
 
@@ -54,7 +64,7 @@ async def api_register(payload: RegisterRequest, response: Response):
         raise HTTPException(status_code=409, detail="That username is already in use") from exc
     token = await run_in_threadpool(create_session, user["id"])
     set_session_cookie(response, token)
-    return _public_user(user)
+    return {**_public_user(user), "recovery_code": user["recovery_code"]}
 
 
 @router.post("/api/auth/login")
@@ -75,6 +85,36 @@ async def api_login(payload: LoginRequest, request: Request, response: Response)
     token = await run_in_threadpool(create_session, user["id"])
     set_session_cookie(response, token)
     return _public_user(user)
+
+
+@router.post("/api/auth/recover")
+async def api_recover_account(payload: RecoveryRequest, request: Request):
+    client_host = request.client.host if request.client else "unknown"
+    rate_limit_username = f"recovery:{payload.username}"
+    remaining = await run_in_threadpool(login_rate_limit_remaining, rate_limit_username, client_host)
+    if remaining is not None:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many recovery attempts. Try again later.",
+            headers={"Retry-After": str(remaining)},
+        )
+    recovered = await run_in_threadpool(
+        recover_account,
+        payload.username.lower(),
+        payload.recovery_code,
+        payload.new_password,
+    )
+    if not recovered:
+        await run_in_threadpool(record_failed_login, rate_limit_username, client_host)
+        raise HTTPException(status_code=400, detail="Unable to recover this account with those details")
+    await run_in_threadpool(clear_login_attempts, rate_limit_username, client_host)
+    return {"status": "ok"}
+
+
+@router.post("/api/auth/recovery-code")
+async def api_rotate_recovery_code(payload: RecoveryCodeRequest, user: dict = Depends(get_current_user)):
+    recovery_code = await run_in_threadpool(rotate_recovery_code, user["id"], payload.current_password)
+    return {"recovery_code": recovery_code}
 
 
 @router.post("/api/auth/logout")
