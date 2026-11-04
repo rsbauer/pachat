@@ -6,7 +6,16 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from auth import _password_matches, _recovery_code_hash, create_account, create_session, password_hash, recover_account
+from auth import (
+    _password_matches,
+    _recovery_code_hash,
+    create_account,
+    create_session,
+    get_current_user,
+    password_hash,
+    recover_account,
+)
+from config import settings
 from models import PasswordUpdate, RegisterRequest
 from routes import router
 from storage import get_session
@@ -225,6 +234,47 @@ class RouteTests(unittest.TestCase):
         response = self.client.get("/api/models")
 
         self.assertEqual(response.status_code, 401)
+
+    @patch("routes.save_assistant_message")
+    @patch("routes.stream_chat")
+    @patch("routes.prepare_chat")
+    @patch("routes.build_document_context", return_value=("File: note.txt\nCare plan", ["encoded-image"]))
+    def test_chat_resolves_selected_documents_and_passes_context_to_model(
+        self,
+        build_context,
+        prepare_chat_mock,
+        stream_chat_mock,
+        _save_assistant,
+    ):
+        user = {"id": uuid4(), "username": "patient.test", "display_name": "Patient", "role": "user"}
+        session_id = uuid4()
+        document_id = uuid4()
+        test_app.dependency_overrides[get_current_user] = lambda: user
+
+        async def fake_stream_chat(*_args, **_kwargs):
+            yield "Answer"
+
+        prepare_chat_mock.return_value = (session_id, [{"role": "user", "content": "Review the note"}])
+        stream_chat_mock.side_effect = fake_stream_chat
+        try:
+            response = self.client.post(
+                "/api/chat",
+                json={"message": "Review the note", "document_ids": [str(document_id)]},
+            )
+        finally:
+            test_app.dependency_overrides.pop(get_current_user, None)
+
+        self.assertEqual(response.status_code, 200)
+        build_context.assert_called_once_with(user["id"], [document_id], settings.UPLOAD_DIR, settings.FILE_ENCRYPTION_KEY)
+        prepare_chat_mock.assert_called_once_with(
+            user["id"],
+            None,
+            "Review the note",
+            settings.OLLAMA_MODEL,
+            [document_id],
+        )
+        self.assertEqual(stream_chat_mock.call_args.kwargs["document_context"], "File: note.txt\nCare plan")
+        self.assertEqual(stream_chat_mock.call_args.kwargs["image_data"], ["encoded-image"])
 
     @patch("routes.set_session_cookie")
     @patch("routes.create_session", return_value="opaque-session-token")

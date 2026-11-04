@@ -9,12 +9,21 @@ class SessionNotFoundError(Exception):
     pass
 
 
+class DocumentNotFoundError(Exception):
+    pass
+
+
 def prepare_chat(
     user_id: UUID,
     session_id: UUID | None,
     user_message: str,
     model_name: str,
+    document_ids: list[UUID] | None = None,
 ) -> tuple[UUID, list[dict[str, str]]]:
+    document_ids = list(dict.fromkeys(document_ids or []))
+    if len(document_ids) > 5:
+        raise ValueError("Select no more than five files for a conversation")
+
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             if session_id is None:
@@ -49,6 +58,21 @@ def prepare_chat(
                     {"role": role, "content": content}
                     for role, content in cursor.fetchall()
                 ]
+
+            for document_id in document_ids:
+                cursor.execute(
+                    "SELECT id FROM uploaded_documents WHERE id = %s AND user_id = %s",
+                    (document_id, user_id),
+                )
+                if cursor.fetchone() is None:
+                    raise DocumentNotFoundError(str(document_id))
+
+            cursor.execute("DELETE FROM chat_session_documents WHERE session_id = %s", (session_id,))
+            for document_id in document_ids:
+                cursor.execute(
+                    "INSERT INTO chat_session_documents (session_id, document_id) VALUES (%s, %s)",
+                    (session_id, document_id),
+                )
 
             cursor.execute(
                 """
@@ -112,6 +136,20 @@ def get_session(user_id: UUID, session_id: UUID) -> dict | None:
                 {"role": role, "content": content, "created_at": created_at}
                 for role, content, created_at in cursor.fetchall()
             ]
+            cursor.execute(
+                """
+                SELECT documents.id, documents.original_name
+                FROM chat_session_documents AS attachments
+                JOIN uploaded_documents AS documents ON documents.id = attachments.document_id
+                WHERE attachments.session_id = %s AND documents.user_id = %s
+                ORDER BY attachments.created_at, documents.original_name
+                """,
+                (session_id, user_id),
+            )
+            documents = [
+                {"id": str(document_id), "filename": filename}
+                for document_id, filename in cursor.fetchall()
+            ]
 
     return {
         "id": session_id,
@@ -120,4 +158,5 @@ def get_session(user_id: UUID, session_id: UUID) -> dict | None:
         "created_at": session[2],
         "updated_at": session[3],
         "messages": messages,
+        "documents": documents,
     }

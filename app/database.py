@@ -99,4 +99,14 @@ def init_db() -> None:
                 );
                 """
             )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS chat_session_documents (
+                    session_id UUID NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+                    document_id UUID NOT NULL REFERENCES uploaded_documents(id) ON DELETE CASCADE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    PRIMARY KEY (session_id, document_id)
+                );
+                """
+            )
             conn.commit()

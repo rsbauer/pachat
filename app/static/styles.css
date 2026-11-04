@@ -459,6 +459,21 @@ input:focus-visible {
   font-size: 0.78rem;
 }
 
+.file-chat-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+
+.file-chat-select input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
 .file-actions {
   display: flex;
   flex: 0 0 auto;
@@ -723,6 +738,16 @@ input:focus-visible {
   background: #fff;
 }
 
+.chat-document-status {
+  margin: 0;
+  padding: 8px 40px;
+  border-top: 1px solid var(--line);
+  background: #fff;
+  color: var(--muted);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
 .empty-state {
   width: min(100%, 520px);
   margin: auto;
@@ -950,6 +975,11 @@ button:disabled {
     padding: 22px;
   }
 
+  .chat-document-status {
+    padding-right: 22px;
+    padding-left: 22px;
+  }
+
   .bubble {
     max-width: 90%;
   }
@@ -1011,6 +1041,11 @@ button:disabled {
   }
 
   .messages {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .chat-document-status {
     padding-right: 16px;
     padding-left: 16px;
   }

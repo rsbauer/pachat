@@ -26,6 +26,7 @@ from auth import (
     update_display_name,
 )
 from config import settings
+from document_context import build_document_context
 from intake import (
     MAX_FILE_COUNT,
     MAX_UPLOAD_SIZE,
@@ -45,7 +46,7 @@ from models import (
     RegisterRequest,
 )
 from ollama_client import stream_chat
-from storage import SessionNotFoundError, get_session, prepare_chat, save_assistant_message
+from storage import DocumentNotFoundError, SessionNotFoundError, get_session, prepare_chat, save_assistant_message
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -255,15 +256,29 @@ async def api_chat(request: ChatRequest, user: dict = Depends(get_current_user))
         raise HTTPException(status_code=400, detail="Message cannot be empty")
 
     try:
+        document_context, image_data = await run_in_threadpool(
+            build_document_context,
+            user["id"],
+            request.document_ids,
+            settings.UPLOAD_DIR,
+            settings.FILE_ENCRYPTION_KEY,
+        )
         session_id, messages = await run_in_threadpool(
             prepare_chat,
             user["id"],
             request.session_id,
             user_message,
             settings.OLLAMA_MODEL,
+            request.document_ids,
         )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="A selected file is not available") from exc
     except SessionNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Session not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="A selected file is not available") from exc
     except Exception as exc:
         logger.exception("Failed to prepare chat session")
         raise HTTPException(status_code=503, detail="Chat storage is unavailable") from exc
@@ -276,6 +291,8 @@ async def api_chat(request: ChatRequest, user: dict = Depends(get_current_user))
                 messages,
                 temperature=request.temperature,
                 system_prompt=request.system_prompt,
+                document_context=document_context,
+                image_data=image_data,
             ):
                 response_parts.append(text_piece)
                 yield f"data: {json.dumps({'content': text_piece})}\n\n"

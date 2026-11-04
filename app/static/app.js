@@ -1,5 +1,6 @@
 const messagesEl = document.getElementById('messages');
 const emptyState = document.getElementById('empty-state');
+const chatDocumentStatus = document.getElementById('chat-document-status');
 const chatForm = document.getElementById('chat-form');
 const promptInput = document.getElementById('prompt');
 const statusIndicator = document.getElementById('status-indicator');
@@ -41,6 +42,8 @@ const managedFiles = document.getElementById('managed-files');
 const state = {
   messages: [],
   sessionId: null,
+  documentIds: [],
+  availableDocuments: [],
   user: null,
   authMode: 'login',
 };
@@ -218,15 +221,26 @@ function setStatus(text) {
 function resetConversation(removeStoredSession) {
   state.messages = [];
   state.sessionId = null;
+  state.documentIds = [];
   if (removeStoredSession) localStorage.removeItem('pachat.sessionId');
   emptyState.hidden = false;
   messagesEl.replaceChildren(emptyState);
+  updateChatDocumentStatus();
+}
+
+function updateChatDocumentStatus() {
+  const selectedDocuments = state.availableDocuments.filter((file) => state.documentIds.includes(file.id));
+  chatDocumentStatus.hidden = selectedDocuments.length === 0;
+  chatDocumentStatus.textContent = selectedDocuments.length
+    ? `Using ${selectedDocuments.length} file(s): ${selectedDocuments.map((file) => file.filename).join(', ')}`
+    : '';
 }
 
 function createRequestBody(prompt) {
   return {
     message: prompt,
     session_id: state.sessionId,
+    document_ids: state.documentIds,
     stream: true,
     temperature: 0.7,
   };
@@ -246,6 +260,9 @@ async function restoreSession() {
 
     const session = await response.json();
     state.sessionId = session.id;
+    state.availableDocuments = session.documents || [];
+    state.documentIds = state.availableDocuments.map((file) => file.id);
+    updateChatDocumentStatus();
     state.messages = session.messages.map(({ role, content }) => ({ role, content }));
     state.messages.forEach(({ role, content }) => addMessage(role, content));
   } catch (error) {
@@ -291,9 +308,11 @@ async function sendPrompt(event) {
       body: JSON.stringify(createRequestBody(prompt)),
     });
 
-    if (!response.ok || !response.body) {
-      throw new Error('Request failed');
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}));
+      throw new Error(result.detail || 'Request failed');
     }
+    if (!response.body) throw new Error('Request failed');
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -341,7 +360,7 @@ async function sendPrompt(event) {
     state.messages.push({ role: 'assistant', content: bubble.textContent });
     setStatus('Ready');
   } catch (error) {
-    bubble.textContent = 'The model request failed. Check the Ollama connection and worker logs.';
+    bubble.textContent = error.message || 'The model request failed. Check the Ollama connection and worker logs.';
     console.error(error);
     setStatus('Error');
   } finally {
@@ -393,7 +412,9 @@ async function loadManagedFiles() {
   try {
     const response = await apiFetch('/api/files');
     const files = await responseJson(response);
+    state.availableDocuments = files;
     filesStatus.textContent = files.length ? '' : 'No files have been added yet.';
+    updateChatDocumentStatus();
     for (const file of files) {
       const item = document.createElement('li');
       const details = document.createElement('div');
@@ -402,7 +423,27 @@ async function loadManagedFiles() {
       filename.textContent = file.filename;
       const metadata = document.createElement('span');
       metadata.textContent = `${formatFileSize(file.size_bytes)} · ${new Date(file.created_at).toLocaleDateString()}`;
-      details.append(filename, metadata);
+      const useInChatLabel = document.createElement('label');
+      useInChatLabel.className = 'file-chat-select';
+      const useInChat = document.createElement('input');
+      useInChat.type = 'checkbox';
+      useInChat.checked = state.documentIds.includes(file.id);
+      useInChat.setAttribute('aria-label', `Use ${file.filename} in this chat`);
+      useInChat.addEventListener('change', () => {
+        if (useInChat.checked && !state.documentIds.includes(file.id)) {
+          if (state.documentIds.length >= 5) {
+            useInChat.checked = false;
+            filesStatus.textContent = 'Select no more than five files for a conversation.';
+            return;
+          }
+          state.documentIds.push(file.id);
+        } else {
+          state.documentIds = state.documentIds.filter((documentId) => documentId !== file.id);
+        }
+        updateChatDocumentStatus();
+      });
+      useInChatLabel.append(useInChat, document.createTextNode('Use in this chat'));
+      details.append(filename, metadata, useInChatLabel);
 
       const actions = document.createElement('div');
       actions.className = 'file-actions';
@@ -435,6 +476,8 @@ async function deleteManagedFile(file) {
   try {
     const response = await apiFetch(`/api/files/${encodeURIComponent(file.id)}`, { method: 'DELETE' });
     await responseJson(response);
+    state.documentIds = state.documentIds.filter((documentId) => documentId !== file.id);
+    updateChatDocumentStatus();
     await loadManagedFiles();
   } catch (error) {
     document.getElementById('files-status').textContent = error.message;

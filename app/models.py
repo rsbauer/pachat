@@ -12,6 +12,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1)
     session_id: UUID | None = None
+    document_ids: list[UUID] = Field(default_factory=list, max_length=5)
     stream: bool = True
     temperature: float = 0.7
     system_prompt: str | None = None
