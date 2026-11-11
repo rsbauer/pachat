@@ -36,6 +36,11 @@ async def index() -> FileResponse:
     return FileResponse(base_dir / "templates" / "index.html")
 
 
+@app.get("/admin/")
+async def admin_index() -> FileResponse:
+    return FileResponse(base_dir / "templates" / "admin.html")
+
+
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}

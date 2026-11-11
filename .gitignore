@@ -1,4 +1,5 @@
 .copilot/
 .github/agents/
 .env
+uploads_data/
 

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, 
 from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
+from admin import delete_chat_session, delete_document, delete_user, get_chat_session, get_user_detail, list_users
 from auth import (
     SESSION_COOKIE,
     UsernameTakenError,
@@ -54,6 +55,56 @@ logger = logging.getLogger(__name__)
 
 def _public_user(user: dict) -> dict:
     return {"id": str(user["id"]), "username": user["username"], "display_name": user["display_name"], "role": user["role"]}
+
+
+async def require_admin(user: dict = Depends(get_current_user)) -> dict:
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
+@router.get("/api/admin/users")
+async def api_admin_users(_admin: dict = Depends(require_admin)):
+    return await run_in_threadpool(list_users)
+
+
+@router.get("/api/admin/users/{user_id}")
+async def api_admin_user_detail(user_id: UUID, _admin: dict = Depends(require_admin)):
+    detail = await run_in_threadpool(get_user_detail, user_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return detail
+
+
+@router.delete("/api/admin/users/{user_id}")
+async def api_admin_delete_user(user_id: UUID, admin: dict = Depends(require_admin)):
+    if user_id == admin["id"]:
+        raise HTTPException(status_code=400, detail="You cannot delete your own account")
+    if not await run_in_threadpool(delete_user, user_id, settings.UPLOAD_DIR):
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"status": "deleted"}
+
+
+@router.get("/api/admin/sessions/{session_id}")
+async def api_admin_session(session_id: UUID, _admin: dict = Depends(require_admin)):
+    session = await run_in_threadpool(get_chat_session, session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    return session
+
+
+@router.delete("/api/admin/sessions/{session_id}")
+async def api_admin_delete_session(session_id: UUID, _admin: dict = Depends(require_admin)):
+    if not await run_in_threadpool(delete_chat_session, session_id):
+        raise HTTPException(status_code=404, detail="Chat not found")
+    return {"status": "deleted"}
+
+
+@router.delete("/api/admin/files/{document_id}")
+async def api_admin_delete_file(document_id: UUID, _admin: dict = Depends(require_admin)):
+    if not await run_in_threadpool(delete_document, document_id, settings.UPLOAD_DIR):
+        raise HTTPException(status_code=404, detail="File not found")
+    return {"status": "deleted"}
 
 
 @router.post("/api/auth/register", status_code=201)

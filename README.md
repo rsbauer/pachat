@@ -52,11 +52,19 @@ Chat context supports PDF files with selectable text, legacy and modern Word doc
 
 Login attempts are limited to five failures per username/client pair in a 15-minute window. Blocked requests receive HTTP 429 and a `Retry-After` header. The database stores only an HMAC of the normalized username and client address. Set a stable, random `AUTH_RATE_LIMIT_SECRET` in `.env`; if it is blank, the app derives the key from `DATABASE_URL`.
 
-For HTTPS deployments, set `APP_ENV=production` so the login cookie is marked Secure. This prototype does not yet include password recovery, account deletion, or an admin interface. Do not use real patient information until access restrictions, privacy/retention policies, operational monitoring, and applicable compliance requirements have been reviewed.
+For HTTPS deployments, set `APP_ENV=production` so the login cookie is marked Secure. Email-based account recovery is not implemented; users recover accounts with their one-time recovery code. Do not use real patient information until access restrictions, privacy/retention policies, operational monitoring, and applicable compliance requirements have been reviewed.
 
 If files were previously saved in the Docker-managed `uploads_data` volume, changing to the local directory does not copy them. The old volume remains intact until explicitly removed; copy its contents before deleting it if you need those files.
 
-The app host is internal and is not directly reachable from the public internet; public traffic is routed through Caddy. Keep direct access to port `9105` limited to trusted internal networks, and keep PostgreSQL port `5432` unavailable to untrusted clients. Authentication is an additional control, not a substitute for these network restrictions.
+The admin page is available at `/admin/` and is not linked from the patient interface. Its APIs require a signed-in account with the `admin` role; knowing the URL alone does not grant access. To grant the role, use a trusted PostgreSQL session and update the intended account:
+
+```sql
+UPDATE app_users SET role = 'admin' WHERE username = 'your-username';
+```
+
+The admin page can review user profiles, chat history, and file metadata, and delete users, chats, or files. Deleting a user also deletes their chat history, file records, and upload directory. Admins cannot preview or download uploaded files; the admin APIs only return file metadata and never decrypt file contents. File size totals use the original uploaded sizes recorded by the app, not encrypted on-disk overhead.
+
+The app host is internal and is not directly reachable from the public internet; public traffic is routed through Caddy. Keep direct access to port `9105` limited to trusted internal networks, and keep PostgreSQL port `5432` unavailable to untrusted clients. Authentication is an additional control, not a substitute for these network restrictions. Do not treat an unlinked or obscure URL as an access control.
 
 ## Managing the Stack
 

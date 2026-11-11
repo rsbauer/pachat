@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#e9eeeb" />
+    <title>Pachat | Admin</title>
+    <link rel="stylesheet" href="/static/admin.css" />
+    <script src="/static/admin.js" defer></script>
+  </head>
+  <body>
+    <main class="admin-page">
+      <header class="admin-header">
+        <a class="admin-brand" href="/" aria-label="Pachat home">
+          <span class="brand-mark" aria-hidden="true">P</span>
+          <span>Pachat <small>Administration</small></span>
+        </a>
+        <div class="admin-account">
+          <span id="admin-identity" class="admin-identity"></span>
+          <button id="admin-signout" class="quiet-button" type="button" hidden>Sign out</button>
+        </div>
+      </header>
+
+      <section class="admin-intro">
+        <div>
+          <p class="eyebrow">Operations</p>
+          <h1>Account overview</h1>
+        </div>
+        <p id="page-status" class="page-status" role="status" aria-live="polite">Checking access...</p>
+      </section>
+
+      <section class="metrics" aria-label="Site totals">
+        <article class="metric">
+          <span>Users</span>
+          <strong id="metric-users">-</strong>
+        </article>
+        <article class="metric">
+          <span>Chats</span>
+          <strong id="metric-chats">-</strong>
+        </article>
+        <article class="metric">
+          <span>Files</span>
+          <strong id="metric-files">-</strong>
+        </article>
+        <article class="metric metric-storage">
+          <span>Uploaded file size</span>
+          <strong id="metric-storage">-</strong>
+        </article>
+      </section>
+
+      <div class="admin-workspace">
+        <section class="users-panel" aria-labelledby="users-heading">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Accounts</p>
+              <h2 id="users-heading">Users</h2>
+            </div>
+            <span id="user-count" class="subtle-count"></span>
+          </div>
+          <label class="search-label" for="user-search">Find a user</label>
+          <input id="user-search" class="search-input" type="search" placeholder="Name or username" autocomplete="off" />
+          <div id="user-list" class="user-list" aria-live="polite"></div>
+        </section>
+
+        <section id="user-detail" class="detail-panel" aria-live="polite" aria-label="Selected user">
+          <div class="empty-detail">
+            <span class="empty-rule" aria-hidden="true"></span>
+            <h2>Select a user</h2>
+            <p>User profile, chat history, and file metadata will appear here.</p>
+          </div>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>
