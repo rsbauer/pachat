@@ -664,19 +664,22 @@ input:focus-visible {
 .intake-form {
   padding: 18px 40px 16px;
   border-bottom: 1px solid var(--line);
-  background: #fbfdfc;
+  background: var(--accent-soft);
 }
 
 .intake-form label {
   display: block;
   margin-bottom: 9px;
+  color: var(--accent);
   font-size: 0.9rem;
   font-weight: 650;
 }
 
 .drop-area {
-  border: 1px solid transparent;
+  padding: 14px 16px;
+  border: 1px dashed #b6c9c1;
   border-radius: 6px;
+  background: #fff;
   transition: background-color 140ms ease, border-color 140ms ease;
 }
 
@@ -838,12 +841,6 @@ button:disabled {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .drop-area {
-    padding: 14px 16px;
-    border: 1px dashed #b6c9c1;
-    background: #fff;
-  }
-
   .drop-hint {
     display: block;
     margin: 0 0 12px;
