@@ -21,8 +21,6 @@ def prepare_chat(
     document_ids: list[UUID] | None = None,
 ) -> tuple[UUID, list[dict[str, str]]]:
     document_ids = list(dict.fromkeys(document_ids or []))
-    if len(document_ids) > 5:
-        raise ValueError("Select no more than five files for a conversation")
 
     with get_db_connection() as conn:
         with conn.cursor() as cursor:

@@ -38,7 +38,6 @@ const filesDialog = document.getElementById('files-dialog');
 const recoveryCodeDialog = document.getElementById('recovery-code-dialog');
 const recoveryCodeValue = document.getElementById('recovery-code-value');
 const managedFiles = document.getElementById('managed-files');
-const MAX_CHAT_FILES = 5;
 
 const state = {
   messages: [],
@@ -387,17 +386,15 @@ async function uploadDocuments(files) {
     const result = await response.json();
     if (!response.ok) throw new Error(result.detail || 'Upload failed');
 
-    let attachedCount = 0;
     for (const file of result.uploaded) {
       const item = document.createElement('li');
-      if (!state.documentIds.includes(file.id) && state.documentIds.length < MAX_CHAT_FILES) {
-        state.documentIds.push(file.id);
+      if (!state.availableDocuments.some((availableFile) => availableFile.id === file.id)) {
         state.availableDocuments.push({ ...file, created_at: new Date().toISOString() });
-        item.textContent = `Saved and attached: ${file.filename}`;
-        attachedCount += 1;
-      } else {
-        item.textContent = `Saved but not attached: ${file.filename}`;
       }
+      if (!state.documentIds.includes(file.id)) {
+        state.documentIds.push(file.id);
+      }
+      item.textContent = `Saved and selected: ${file.filename}`;
       uploadResults.appendChild(item);
     }
     for (const file of result.rejected) {
@@ -405,7 +402,7 @@ async function uploadDocuments(files) {
       item.textContent = `Not saved: ${file.filename} (${file.reason})`;
       uploadResults.appendChild(item);
     }
-    uploadStatus.textContent = `${result.uploaded.length} file(s) saved; ${attachedCount} attached to this chat.`;
+    uploadStatus.textContent = `${result.uploaded.length} file(s) saved and selected for this chat.`;
     updateChatDocumentStatus();
     documentFiles.value = '';
   } catch (error) {
@@ -441,11 +438,6 @@ async function loadManagedFiles() {
       useInChat.setAttribute('aria-label', `Use ${file.filename} in this chat`);
       useInChat.addEventListener('change', () => {
         if (useInChat.checked && !state.documentIds.includes(file.id)) {
-          if (state.documentIds.length >= MAX_CHAT_FILES) {
-            useInChat.checked = false;
-            filesStatus.textContent = 'Select no more than five files for a conversation.';
-            return;
-          }
           state.documentIds.push(file.id);
         } else {
           state.documentIds = state.documentIds.filter((documentId) => documentId !== file.id);

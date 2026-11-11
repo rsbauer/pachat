@@ -18,7 +18,6 @@ from striprtf.striprtf import rtf_to_text
 
 from intake import TEXT_EXTENSIONS, get_user_document
 
-MAX_DOCUMENT_COUNT = 5
 MAX_DOCUMENT_CONTEXT_CHARS = 60_000
 MAX_OFFICE_ARCHIVE_BYTES = 100 * 1024 * 1024
 MAX_IMAGE_COUNT = 4
@@ -177,9 +176,6 @@ def build_document_context(
     upload_dir: str,
     encryption_key: str,
 ) -> tuple[str, list[str]]:
-    if len(set(document_ids)) > MAX_DOCUMENT_COUNT:
-        raise ValueError(f"Select no more than {MAX_DOCUMENT_COUNT} files for a conversation")
-
     text_parts = []
     images = []
     image_filenames = []

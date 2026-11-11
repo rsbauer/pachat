@@ -91,9 +91,21 @@ class SessionDocumentTests(unittest.TestCase):
         self.assertEqual(session["documents"], [{"id": str(document_id), "filename": "note.txt"}])
         self.assertEqual(session["messages"][0]["content"], "Review this file")
 
-    def test_prepare_chat_enforces_five_file_limit(self):
-        with self.assertRaisesRegex(ValueError, "no more than five"):
-            prepare_chat(uuid4(), None, "Review this file", "model", [uuid4() for _ in range(6)])
+    def test_prepare_chat_links_more_than_five_documents(self):
+        user_id = uuid4()
+        document_ids = [uuid4() for _ in range(6)]
+        cursor = FakeCursor(fetchone_values=[(document_id,) for document_id in document_ids])
+
+        with patch("storage.get_db_connection", return_value=FakeConnection(cursor)):
+            prepare_chat(user_id, None, "Review these files", "model", document_ids)
+
+        attachments = [
+            params
+            for query, params in cursor.statements
+            if query.startswith("INSERT INTO chat_session_documents")
+        ]
+        self.assertEqual(len(attachments), 6)
+        self.assertEqual([attachment[1] for attachment in attachments], document_ids)
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ from PIL import Image
 from pypdf import PdfWriter
 
 from document_context import _image_data, build_document_context, extract_document_text
+from models import ChatRequest
 from ollama_client import _build_messages
 
 
@@ -67,6 +68,24 @@ class DocumentExtractionTests(unittest.TestCase):
         get_document.assert_called_once_with(user_id, document_id, "/unused", "unused-key")
         self.assertIn("Patient note", context)
         self.assertEqual(images, [])
+
+    def test_build_context_loads_more_than_five_selected_files(self):
+        user_id = uuid4()
+        document_ids = [uuid4() for _ in range(6)]
+        with patch(
+            "document_context.get_user_document",
+            return_value={"filename": "note.txt", "mime_type": "text/plain", "content": b"Patient note"},
+        ) as get_document:
+            context, images = build_document_context(user_id, document_ids, "/unused", "unused-key")
+
+        self.assertEqual(get_document.call_count, 6)
+        self.assertEqual(context.count("File: note.txt"), 6)
+        self.assertEqual(images, [])
+
+    def test_chat_request_accepts_more_than_five_document_ids(self):
+        request = ChatRequest(message="Review these files", document_ids=[uuid4() for _ in range(6)])
+
+        self.assertEqual(len(request.document_ids), 6)
 
 
 class OllamaContextTests(unittest.TestCase):
